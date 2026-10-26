@@ -1,0 +1,19 @@
+# Hand fixes for prerequisites the parser cannot read on its own.
+# `prereq` replaces the parsed logic. It uses the same mini-language as the Bulletin:
+# course codes, and/or, commas, parentheses. [square brackets] = a manual condition
+# the planner cannot check (shown to the student as "confirm with advisor").
+
+CSC 385:
+  prereq: "CSC 201"
+  reason: "BIO 150/150L/160/160L apply only when taken as BIO 385; CS students take it as CSC 385."
+  status: interpreted   # NEEDS HUMAN REVIEW: confirm with the CS department
+
+CSC 387:
+  prereq: "CSC 201"
+  reason: "BIO prerequisites apply only when taken as BIO 387; CS students take it as CSC 387."
+  status: interpreted   # NEEDS HUMAN REVIEW
+
+STA 112:
+  prereq: "STA 111 or [AP Statistics exam score of 4 or 5]"
+  reason: "The Bulletin's comma here means 'or': STA 111 OR an AP Statistics score of 4-5."
+  status: interpreted   # NEEDS HUMAN REVIEW

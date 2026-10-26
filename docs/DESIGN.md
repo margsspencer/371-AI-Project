@@ -3,7 +3,13 @@
 Status: draft for team review, written 2026-10-26. Source of truth: the
 2026-2027 WFU Undergraduate Bulletin (https://bulletin.wfu.edu/undergraduate/).
 
-Decisions so far:
+Decisions so far (see also `data/overrides/team_decisions.yaml`):
+- **QR (Quantitative Reasoning):** a school-wide requirement of at least one
+  QR-tagged course (team, 2026-10-26; not on the scraped degree page).
+- **Offerings:** every course is offered fall + spring unless the Bulletin or
+  `offerings.csv` says otherwise (team-approved default, 2026-10-26).
+- **Mixed and/or with no parentheses:** "or" binds tighter, so every course
+  joined by "or" is an option (team, 2026-10-26).
 - **LLM:** optional. The recommender works offline by default; an LLM may
   rewrite the explanation sentence if an API key is set.
 - **Core Curriculum:** placeholder slots that the audit tracks. The planner

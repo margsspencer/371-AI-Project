@@ -42,7 +42,9 @@ OFFERING_RE = re.compile(
 )
 # "... and prerequisite override required" = permission is ALWAYS needed (not just an alternative).
 OVERRIDE_REQUIRED_RE = re.compile(r",?\s*and\s+(?:the\s+)?prerequisite override required", re.I)
-EXCLUSION_RE = re.compile(r"\b(not (?:to )?be counted|may not be counted|no more than .* may be counted)\b", re.I)
+EXCLUSION_RE = re.compile(
+    r"\b(not (?:to )?be counted|may not be counted|does not count|no more than .* may be counted)\b", re.I
+)
 CREDIT_NOT_BOTH_RE = re.compile(r"credit not allowed for both", re.I)
 
 

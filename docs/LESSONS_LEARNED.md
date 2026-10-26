@@ -74,3 +74,42 @@ was true, and what we did about it.
     flagged for review (mostly mixed and/or without parentheses), 9 courses
     need department permission, 16 carry the undocumented `(QR)` tag, and 0
     credit-parse failures.
+
+## 2026-10-26: Milestone 2 (data model, prerequisite parser, programs, core)
+
+12. **Team decisions recorded as data, not code.** QR as a school-wide
+    requirement, fall + spring as the default offering, and "or binds
+    tighter" are kept in `team_decisions.yaml` with a source line. The
+    validation report labels them "not from the Bulletin". *Lesson:* keeping
+    each rule's source attached makes it easy to explain where a rule came from.
+
+13. **Bug: case-insensitive matching.** The tokenizer matched course codes
+    ignoring case, so "and 250" was read as the course "AND 250", and every
+    prerequisite with an implied subject failed. **Fix:** course codes are
+    matched case-sensitively; only connector words ignore case. Found by
+    running the parser on all real prerequisites before writing tests.
+
+14. **Why CNF ("AND of ORs").** "(MTH 121 and 251) or MTH 205" becomes
+    (121 or 205) AND (251 or 205). Every clause is one simple constraint for
+    the planner, and checking a student is "every clause has a completed
+    option".
+
+15. **Parse results:** 82 prerequisite/corequisite sentences. 59 parse
+    directly, 15 by the team and/or rule, 3 by a hand override (CSC 385/387
+    conditional BIO prerequisites, the STA 112 AP score), and 3 keep a
+    manual condition (class standing, "experience with statistical
+    computing"). 0 failures.
+
+16. **The Bulletin references a course that doesn't exist:** MTH 355's
+    prerequisite lists "MTH 206", which has no entry in Courses A-Z. Flagged
+    rather than "fixed". *Lesson:* even the official source has errors.
+
+17. **A self-check from the source itself.** Each program page states
+    "Requires a minimum of N hours in computer science". Adding up the
+    parsed requirement table gives exactly 42 (B.S.), 33 (B.A.), and 17
+    (minor). An automatic check now runs on every build, so a parsing
+    mistake in a program table would show up as an error.
+
+18. **Ambiguity that remains:** the B.A. and minor say "Select three hours at
+    the 191-level or higher" without naming a subject. We assume CSC (the
+    program's department) and flag it NEEDS HUMAN REVIEW.

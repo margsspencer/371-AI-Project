@@ -31,8 +31,20 @@ pytest -q                         # all tests should pass
 
 ```bash
 python scripts/scrape.py          # downloads ~10 Bulletin pages once (2 s apart), caches in data/raw/
-python scripts/validate_data.py   # parses courses, writes data/validation_report.md
+python scripts/build_db.py        # parses everything -> data/bulletin_2026-2027.db + data/validation_report.md
+python scripts/show.py "CSC 374"  # look up a course, a program (CSC-BS), or "core"
 ```
+
+`scripts/validate_data.py` writes only the report, without rebuilding the database.
+
+### Fixing data by hand (`data/overrides/`)
+| File | What it does |
+|---|---|
+| `team_decisions.yaml` | Rules the team decided that are not on the Bulletin pages (QR requirement, default offering pattern, and/or rule), each with its source |
+| `prereq_overrides.yaml` | Replaces a course's parsed prerequisite. Same syntax as the Bulletin; `[brackets]` = a condition a human must check |
+| `offerings.csv` | When a course is offered. `terms` is `fall`, `spring`, `summer`, separated by `;`. `year_parity` is `any`, `odd`, or `even` |
+
+After editing any of these, run `python scripts/build_db.py` again.
 
 The scraper follows `robots.txt`, waits 2 seconds between requests, and
 reuses cached pages. Use `--refresh` only when the Bulletin changes.
@@ -43,7 +55,10 @@ reuses cached pages. Use `--refresh` only when the Bulletin changes.
 src/gradplanner/
   config.py       Bulletin year, paths, scraper settings
   scraper/        polite fetcher + list of Bulletin pages
-  parser/         HTML -> course records
+  parser/         HTML -> courses, prerequisite logic (prereq.py), programs, core rules
+  models.py       Catalog / Course / Program: the data model everything else uses
+  pipeline.py     cached pages + overrides -> Catalog
+  db/             SQLite schema + save/load
   validation.py   checks that flag data needing a human fix
 scripts/          command-line entry points
 tests/            pytest (synthetic fixtures only, no real student data)

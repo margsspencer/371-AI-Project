@@ -1,0 +1,21 @@
+# Rules decided by the project team (NOT found on the Bulletin pages we scrape).
+# Every entry records who decided it and when, so the paper and the UI can
+# show where a rule came from. Edit with care.
+
+extra_core_categories:
+  - id: QR
+    family: divisional-wide
+    name: Quantitative Reasoning (QR)
+    tag: QR
+    courses_required: 1
+    source: "team review 2026-10-26: QR is a school-wide requirement; at least one QR-tagged course before graduation"
+    note: "Not described on /undergraduate/requirements-degrees/ (2026-27). Confirm with an advisor."
+
+offering_default:
+  terms: [fall, spring]
+  year_parity: any
+  source: "team decision 2026-10-26: Bulletin gives no offering pattern for most courses; assume fall + spring every year"
+
+prereq_mixed_and_or:
+  rule: "'A and B or C' (no parentheses) means A and (B or C): every course joined by 'or' is an option"
+  source: "team decision 2026-10-26"
