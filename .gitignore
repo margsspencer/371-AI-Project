@@ -1,0 +1,11 @@
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+*.egg-info/
+# Cached Bulletin pages and generated data (rebuild with scripts/)
+data/raw/
+data/staging/
+data/*.db
+data/validation_report.md
+.env

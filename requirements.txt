@@ -1,0 +1,13 @@
+# Scraping + data
+requests==2.32.3
+beautifulsoup4==4.12.3
+PyYAML==6.0.2
+# Planner (milestone 3)
+ortools==9.11.4210
+# Recommender (milestone 5)
+scikit-learn==1.5.2
+# UI + export (milestones 6, 8)
+streamlit==1.39.0
+icalendar==6.0.1
+# Tests
+pytest==8.3.3
