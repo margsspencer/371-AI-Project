@@ -11,6 +11,9 @@ requires-python = ">=3.11"
 [tool.setuptools.packages.find]
 where = ["src"]
 
+[tool.setuptools.package-data]
+gradplanner = ["db/*.sql", "recommender/*.yaml"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 # OR-Tools' protobuf dependency warns about Python 3.14; not our code.

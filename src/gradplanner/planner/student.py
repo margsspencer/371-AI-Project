@@ -14,7 +14,9 @@ go into the database. Example:
     in_progress: [CSC 112]         # enrolled this semester; planning assumes they pass
     outside_courses:               # courses not in our catalog (other departments)
       - {name: HST 101, hours: 3, counts_for: DIV-I}
-    interests: [CSC 374]           # electives to prefer (later: the recommender fills this)
+    interests: [CSC 374]           # electives the student definitely wants
+    career: machine-learning-engineer   # pick-list id from recommender/careers.yaml (optional)
+    career_text: "AI for healthcare"     # the student's own words (optional)
 """
 
 from __future__ import annotations
@@ -57,6 +59,8 @@ class StudentProfile:
     in_progress: list[str] = field(default_factory=list)   # current semester, before next_term
     outside_courses: list[OutsideCourse] = field(default_factory=list)
     interests: list[str] = field(default_factory=list)
+    career: str | None = None
+    career_text: str = ""
 
     def plan_terms(self) -> list[Term]:
         return terms_between(self.next_term, self.graduation_term, self.include_summer)
@@ -97,6 +101,8 @@ def profile_from_dict(d: dict) -> StudentProfile:
         in_progress=list(d.get("in_progress", [])),
         outside_courses=[OutsideCourse(**c) for c in d.get("outside_courses", [])],
         interests=list(d.get("interests", [])),
+        career=d.get("career"),
+        career_text=d.get("career_text", ""),
     )
     if p.graduation_term < p.next_term:
         raise ValueError("graduation_term is before next_term")

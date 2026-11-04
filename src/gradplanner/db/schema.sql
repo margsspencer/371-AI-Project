@@ -69,7 +69,8 @@ CREATE TABLE program (
     degree         TEXT,                        -- BS | BA | NULL
     subject        TEXT NOT NULL,
     intro          TEXT NOT NULL,
-    source_key     TEXT NOT NULL
+    source_key     TEXT NOT NULL,
+    school         TEXT NOT NULL DEFAULT 'College'   -- College | Business
 );
 
 CREATE TABLE requirement_group (
@@ -140,4 +141,9 @@ CREATE TABLE term_calendar (
     classes_end    TEXT,
     exams_end      TEXT,
     is_estimated   INTEGER NOT NULL
+);
+
+CREATE TABLE subject (
+    code  TEXT PRIMARY KEY,      -- 'CSC'
+    name  TEXT NOT NULL          -- 'Computer Science' (from Courses A-Z)
 );

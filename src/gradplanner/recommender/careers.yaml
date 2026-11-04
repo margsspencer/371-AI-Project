@@ -1,0 +1,127 @@
+# Career pick-list for the recommender. Written by the project team (2026-11-03).
+#
+# Each career adds keywords to the student's own words before matching them
+# against course titles and descriptions from the Bulletin. Keywords should be
+# words that actually appear in course descriptions ("learning", "network"),
+# not job-ad jargon ("MLOps"). The paper discusses how these lists were chosen.
+
+machine-learning-engineer:
+  label: Machine learning engineer
+  keywords: machine learning, neural networks, deep learning, data, statistics, optimization,
+    regression, classification, artificial intelligence, algorithms, linear algebra, probability
+
+data-scientist:
+  label: Data scientist
+  keywords: data, statistics, statistical, regression, visualization, modeling, analysis, databases,
+    machine learning, probability, inference, multivariate, computing
+
+software-engineer:
+  label: Software engineer
+  keywords: software, engineering, design, testing, programming, projects, team, development,
+    systems, databases, web, applications
+
+cybersecurity-analyst:
+  label: Cybersecurity analyst
+  keywords: security, cryptography, network, protocols, authentication, access control, privacy,
+    operating systems, risk, attacks, forensics
+
+game-developer:
+  label: Game developer
+  keywords: graphics, rendering, animation, games, interactive, visualization, geometry, simulation,
+    physics, programming, design
+
+systems-cloud-engineer:
+  label: Systems / cloud engineer
+  keywords: operating systems, distributed, parallel, network, protocols, architecture, performance,
+    concurrency, cloud, systems, compilers, memory
+
+computational-biologist:
+  label: Computational biologist
+  keywords: bioinformatics, biology, genomics, sequences, biological, computational, data, statistics,
+    algorithms, modeling
+
+researcher-theory:
+  label: Research / graduate school (theory)
+  keywords: theory, algorithms, complexity, computability, proofs, logic, automata, mathematics,
+    analysis, discrete, formal, languages
+
+# --- Other fields (added 2026-11-03 when all departments were included) ---
+
+physician-premed:
+  label: Physician / pre-med
+  keywords: biology, chemistry, organic chemistry, biochemistry, physiology, anatomy, genetics, cell,
+    molecular, human health, medicine, disease, physics, statistics
+
+nurse-public-health:
+  label: Public health / health services
+  keywords: health, public health, epidemiology, disease, health policy, community, nutrition,
+    exercise, wellness, health care, statistics
+
+financial-analyst:
+  label: Financial analyst
+  keywords: finance, financial, investment, markets, valuation, corporate finance, accounting,
+    economics, risk, portfolio, statistics, data
+
+accountant:
+  label: Accountant / auditor
+  keywords: accounting, financial accounting, auditing, tax, taxation, financial statements,
+    reporting, business law, ethics
+
+consultant-business:
+  label: Management consultant
+  keywords: strategy, management, organizations, leadership, analytics, decision, marketing,
+    operations, economics, entrepreneurship, data
+
+marketing:
+  label: Marketing / communications
+  keywords: marketing, advertising, consumer, brand, public relations, communication, media,
+    persuasion, digital media, audience
+
+lawyer-prelaw:
+  label: Lawyer / pre-law
+  keywords: law, legal, constitutional, rights, justice, argument, rhetoric, ethics, politics,
+    government, courts, philosophy
+
+public-policy:
+  label: Public policy / government
+  keywords: policy, public policy, government, politics, international, economics, institutions,
+    political, development, inequality, law
+
+psychologist-counselor:
+  label: Psychologist / counselor
+  keywords: psychology, behavior, cognitive, mental health, development, personality, social,
+    clinical, counseling, neuroscience, brain
+
+teacher:
+  label: Teacher / education
+  keywords: education, teaching, schools, learning, curriculum, pedagogy, children, literacy,
+    classroom, development
+
+journalist:
+  label: Journalist / writer
+  keywords: journalism, writing, reporting, news, media, editing, nonfiction, storytelling,
+    digital media, ethics
+
+environmental-scientist:
+  label: Environmental scientist
+  keywords: environmental, environment, ecology, sustainability, climate, conservation, earth,
+    water, energy, biology, chemistry, policy
+
+engineer:
+  label: Engineer
+  keywords: engineering, design, mechanics, materials, circuits, electronics, thermodynamics,
+    systems, physics, mathematics, manufacturing
+
+artist-designer:
+  label: Artist / designer
+  keywords: art, studio, design, drawing, painting, sculpture, photography, visual, digital,
+    media, aesthetics, film
+
+performing-artist:
+  label: Musician / performer
+  keywords: music, performance, theatre, dance, acting, composition, ensemble, voice, stage
+
+international-careers:
+  label: International affairs / global careers
+  keywords: international, global, culture, language, diplomacy, politics, trade, development,
+    regions, translation, intercultural

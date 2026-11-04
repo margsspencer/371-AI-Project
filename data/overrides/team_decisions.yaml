@@ -31,9 +31,30 @@ placeholder_hours:
   source: "team decision 2026-11-03"
 
 subject_departments:
-  # Bulletin department name for each subject code we scrape. Divisional
-  # requirements list departments by name, so this decides which division a
-  # course counts toward.
+  # Divisional requirements list departments by name. Subject names from
+  # Courses A-Z are matched against those lists automatically; these entries
+  # cover names that differ. Subjects that match no division (e.g. Classics,
+  # French in Translation) don't count toward a division automatically; the
+  # planner uses a generic slot instead. (team, 2026-11-03)
   CSC: Computer Science
   MTH: Mathematics
   STA: Statistical Sciences
+  REL: Study of Religions
+  WGS: "Women’s, Gender, and Sexuality Studies"
+  POL: Politics and International Affairs
+
+subject_aliases:
+  # Names programs use for a subject that differ from the Courses A-Z name.
+  # Used to read rows like "Select four courses in Art History". (team, 2026-11-03)
+  art history: ART
+  studio art: ART
+  greek: GRK
+  latin: LAT
+  economics: ECN
+  journalism: JOU
+  spanish: SPA
+  physics: PHY
+  biology: BIO
+  chemistry: CHM
+  psychology: PSY
+  statistics: STA

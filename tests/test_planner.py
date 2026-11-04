@@ -182,7 +182,7 @@ def test_solver_explains_offering_conflict():
                                graduation_term=Term("spring", 2028)))
     assert plan.status == "infeasible"
     text = plan.explanations[0]
-    assert "prerequisites" in text and "major/minor" in text
+    assert "prerequisites" in text and "requirement 'Required: TST 301'" in text
     assert "maximum hours" not in text and "120-hour" not in text     # only the groups that conflict
 
 
@@ -240,3 +240,13 @@ def test_real_bs_plan_for_sample_student():
     assert plan.ok, plan.explanations
     assert len(plan.terms) == 8
     assert validate_plan(plan, cat, st) == []
+
+
+def test_required_course_needing_permission_is_left_for_advisor():
+    cat = catalog()
+    cat.programs["TST-BS"].groups[0].items.append(RequirementItem("course", "TST 395", ["TST 395"]))
+    cat2, st, plan = solve(cat=cat)
+    assert plan.ok, plan.explanations
+    assert plan.term_of("TST 395") is None
+    assert any("TST 395" in n and "advisor" in n for n in plan.notes)
+    assert validate_plan(plan, cat2, st, SETTINGS) == []

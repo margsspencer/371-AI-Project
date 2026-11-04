@@ -26,3 +26,4 @@ outside_courses:
   - {name: ENG 175, hours: 3, counts_for: DIV-II}
   - {name: Elective credits, hours: 9}
 interests: [CSC 341]
+career: cybersecurity-analyst

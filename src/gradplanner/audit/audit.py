@@ -134,6 +134,8 @@ def _program_lines(catalog: Catalog, student: StudentProfile, entries: list[Entr
                 lines[need.key].detail += "; other options need advisor approval"
         elif it.kind == "free_text":
             lines[need.key] = AuditLine(section, label, "review", "check with your advisor")
+        elif it.kind == "note" and it.needs_review:
+            lines[need.key] = AuditLine(section, label, "review", it.needs_review)
 
     # Elective-hours rules: strictest (highest level) first; each course fills one rule.
     taken: set[str] = set()
@@ -234,7 +236,7 @@ def _core_lines(catalog: Catalog, student: StudentProfile, entries: list[Entry],
 def run_audit(catalog: Catalog, student: StudentProfile, plan: Plan | None = None,
               settings: PlannerSettings | None = None) -> Audit:
     """Build the checklist from completed, in-progress, and (if given) planned courses."""
-    settings = settings or load_settings()
+    settings = settings or load_settings(catalog)
     notes: list[str] = []
     entries = _entries(catalog, student, plan, notes)
     lines = _program_lines(catalog, student, entries) + _core_lines(catalog, student, entries, settings)

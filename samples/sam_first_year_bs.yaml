@@ -8,4 +8,6 @@ max_hours_per_term: 17
 language_courses_needed: 2     # placed into the 153 level, so two courses to finish a 200-level one
 completed: []
 outside_courses: []
-interests: [CSC 374, CSC 375]
+interests: []
+career: machine-learning-engineer
+career_text: "AI for healthcare"

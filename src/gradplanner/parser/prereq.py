@@ -334,3 +334,178 @@ def cnf_to_text(cnf: CNF) -> str:
         names = [str(a) for a in clause]
         parts.append(names[0] if len(names) == 1 else "(" + " OR ".join(names) + ")")
     return " AND ".join(parts)
+
+
+# ---------------------------------------------------------------------------
+# Cleaning Bulletin wording before parsing (all departments)
+# ---------------------------------------------------------------------------
+# Other departments write prerequisites in many styles. These rules rewrite
+# the common ones into the form the parser above understands. Each rule that
+# fires adds a note, so the validation report shows what was changed.
+
+
+@dataclass
+class CleanedPrereq:
+    text: str                  # what to parse as the prerequisite
+    coreq: str                 # corequisite text found inside the prerequisite ("P or C- X", "C- X")
+    standing: str | None       # "sophomore" | "junior" | "senior" from "junior or senior standing"
+    notes: list[str]
+
+
+_CODE = r"[A-Z]{2,4} \d{3}[A-Z]?"
+_NUM = r"(?:[A-Z]{2,4} )?\d{3}[A-Z]?"
+_NOTE_PAREN = re.compile(r"recommend|not open|offered|if taken as|required|only|majors|equivalent credit|"
+                         r"camera|depending|concurrent", re.I)
+_DROP_PHRASES = [r"depending on the topic", r"in the same dialect", r"with associated labs",
+                 r";?\s*knowledge of [^;]*recommended", r"\(all majors\)"]
+
+
+def clean_prereq_text(text: str | None, subject: str | None = None,
+                      known_codes: set[str] | None = None) -> CleanedPrereq:
+    """Rewrite common Bulletin prerequisite styles. `subject` is the course's own subject
+    (used for "200-level course" with no subject named). `known_codes` (all catalog course
+    ids) lets ranges like "SPA 310 - SPA 319" expand to the courses that exist."""
+    if not text:
+        return CleanedPrereq(text or "", "", None, [])
+    s, notes, coreq, standing = text.strip(), [], "", None
+
+    def note(msg: str) -> None:
+        if msg not in notes:
+            notes.append(msg)
+
+    s = re.sub(r"^[\s\-–:]+", "", s)                                # "- FRH 216" (stray dash)
+    if re.search(r"\bmajors? only\b", s, re.I) and re.search(r"\bC\s?[-\u2013]", s):
+        s = re.sub(r"[;,]?\s*(?:or )?(?:P or )?C\s?[-\u2013].*$", "", s).strip()
+        note("corequisite that applies only to some majors dropped")
+    s = re.sub(r"^or\s+", "", s)
+    s = re.sub(r"\bP or C\b(?!\s*[-\u2013])", "P or C-", s)              # "P or C MTH 111" (dash missing)
+    s = re.sub(r"\b([A-Z]{2,4})(\d{3}[A-Z]?)\b", r"\1 \2", s)          # "STA111" -> "STA 111"
+    s = re.sub(r"\bAND\b", "and", s)
+
+    # Class standing -> a separate field
+    m = re.search(r"\b(sophomore|junior|senior)(?: or (?:junior|senior))?(?: major)? (?:standing|status)\b"
+                  r"|^\s*(senior) majors\s*$", s, re.I)
+    if m:
+        standing = (m.group(1) or m.group(2)).lower()
+        s = s[:m.start()] + s[m.end():]
+        note(f"class standing '{m.group()}' stored separately")
+
+    # "any two of the following ...: A (or A2), B or C" -> at least two of the options
+    m = re.match(r"^\s*(?:any )?(two|three) of the following[^:]*:\s*(.+)$", s, re.I)
+    if m:
+        k = {"two": 2, "three": 3}[m.group(1).lower()]
+        body = re.sub(r"\s*\(\s*or\s+([^()]+)\)", r" / \1", m.group(2).rstrip(". "))   # "A (or A2)" -> "A / A2"
+        parts = [p.strip() for p in re.split(r",\s*|\s+or\s+", body) if p.strip()]
+        exprs = [f"({p.replace(' / ', ' or ')})" if " / " in p else p for p in parts]
+        if len(exprs) > k:
+            from itertools import combinations
+            # at least k of n  <=>  every group of (n - k + 1) options contains one taken
+            groups = combinations(exprs, len(exprs) - k + 1)
+            s = " and ".join("(" + " or ".join(g) + ")" for g in groups)
+            note(f"'any {m.group(1)} of the following' written as and/or logic")
+
+    # "X must be taken before or concurrently with this course" -> corequisite
+    m = re.match(rf"^({_CODE}) must be taken before or concurrently with this course", s)
+    if m:
+        return CleanedPrereq("", m.group(1), standing, notes + ["'before or concurrently' read as a corequisite"])
+
+    # "(or instead of MTH 205, P- MTH 121 and 251)" -> "(or MTH 121 and 251)"
+    s = re.sub(rf"or instead of {_CODE},\s*P-\s*", "or ", s)
+
+    # Grade conditions are not checked (we don't track grades)
+    before = s
+    for pat in (r"(?:with )?(?:a )?(?:grade of )?C-? or (?:better|higher)(?: in)?",
+                r"(?:a )?minimum (?:grade )?of C-?(?: in)?"):
+        s = re.sub(pat, "", s, flags=re.I)
+    if s != before:
+        note("grade requirement (e.g. 'C or better') not checked; the planner assumes you pass")
+
+    # Parentheses that hold a note rather than logic
+    def paren(m: re.Match) -> str:
+        inner = m.group(1)
+        if re.search(_CODE + "|" + r"\b\d{3}\b", inner) and not _NOTE_PAREN.search(inner):
+            return m.group()
+        note(f"note dropped from prerequisite: '({inner})'")
+        return ""
+    s = re.sub(r"\(([^()]*)\)", paren, s)
+    for pat in _DROP_PHRASES:
+        if re.search(pat, s, re.I):
+            s = re.sub(pat, "", s, flags=re.I)
+            note("descriptive phrase dropped from prerequisite")
+
+    # Corequisites written inside the prerequisite: "...; P or C- X", "..., C- X"
+    m = re.search(r"(?:^|[;,]\s*|\band\s+|\s)(?:P or C\s?[-–]|C or P\s?[-–]|C\s?[-–])\s*", s)
+    if m:
+        coreq = re.sub(r"[;,]?\s*(?:P or C\s?[-–]|C or P\s?[-–]|C\s?[-–])\s*", ", ", s[m.end():])
+        s = s[:m.start()]
+        note("corequisite written inside the prerequisite ('C-' / 'P or C-') moved to corequisites")
+
+    # "or equivalent", "or placement", "or POI" -> a manual option
+    s = re.sub(r"[,;]?\s*or (?:the )?(equivalent|placement|POI|permission of (?:the )?instructor|"
+               r"prerequisite override)\b", r" or [\1]", s, flags=re.I)
+    s = re.sub(r"\band/or\b", "or", s)
+    s = re.sub(r";\s*or\b", " or", s)
+    s = re.sub(r"\s+for [A-Z]{2,4} majors\b", "", s)
+
+    # "an applied statistics course such as A, B, or C" -> the examples become the options
+    if re.search(r"\ban? [^,;()]*? course,? such as ", s, re.I):
+        s = re.sub(r"\ban? [^,;()]*? course,? such as ", "", s, flags=re.I)
+        note("'a course such as A, B, or C': the listed examples are used as the options; ask about others")
+
+    # Ranges: "SPA 310 - SPA 319", "PSY 220 -299" -> the catalog courses in that range
+    def course_range(m: re.Match) -> str:
+        subj, lo, hi = m.group(1), int(m.group(2)), int(m.group(3))
+        codes = sorted(c for c in (known_codes or set())
+                       if c.split()[0] == subj and lo <= int(re.match(r"\d+", c.split()[1]).group()) <= hi)
+        note(f"range {subj} {lo}-{hi} read as any course in it")
+        return "(" + " or ".join(codes) + ")" if codes else f"[any {subj} course numbered {lo}-{hi}]"
+    s = re.sub(r"(?:any course in |at least \d+ credit hours from )?([A-Z]{2,4}) (\d{3})\s*[-\u2013]\s*"
+               r"(?:[A-Z]{2,4} )?(\d{3})(?: sequence)?", course_range, s)
+
+    # "X (or Y and Z)" -> "(X or (Y and Z))"
+    s = re.sub(rf"({_NUM}) \(or ([^()]+)\)", r"(\1 or (\2))", s)
+    s = re.sub(r"^\s*Prerequisite override required\b", "[prerequisite override]", s)
+
+    # Slashes: "CHM 111 /111L" = lecture and lab together; "BIO/BMB/ CHM 370" and "A / B" = or
+    s = re.sub(r"\b([A-Z]{2,4}) (\d{3})\s*/\s*\2L\b", r"(\1 \2 and \1 \2L)", s)
+    s = re.sub(r"\b((?:[A-Z]{2,4}\s*/\s*)+)([A-Z]{2,4}) (\d{3}[A-Z]?)",
+               lambda m: " or ".join(f"{x.strip()} {m.group(3)}" for x in m.group(1).split("/") if x.strip())
+               + f" or {m.group(2)} {m.group(3)}", s)
+    if "/" in s:
+        s = re.sub(r"\s*/\s*", " or ", s)
+        note("'/' read as 'or'")
+
+    # "A, B, or C" (comma list ending in "or") -> A or B or C
+    def or_list(m: re.Match) -> str:
+        note("comma list ending in 'or' read as one choice")
+        return re.sub(r",\s*", " or ", m.group(1)) + m.group(2)
+    s = re.sub(rf"((?:{_NUM},\s*)+)or\s+({_NUM})", or_list, s)
+
+    # Level phrases -> "any NNN-level SUBJ course"
+    own = subject or ""
+    level_rules = [
+        (r"\b(?:any|a|one)?\s*(?:previous )?(\d{3})[- ]level ((?-i:[A-Z]{2,4})) courses?", r"any \1-level \2 course"),
+        (r"\b((?-i:[A-Z]{2,4})) (\d{3})[- ]level courses?", r"any \2-level \1 course"),
+        (r"\b(?:any|a|one)\s+(\d{3})[- ]level courses?", rf"any \1-level {own} course"),
+        (r"^\s*(\d{3})[- ]level(?: courses?)?", rf"any \1-level {own} course"),
+        (r"\b(?:any|one|a) ((?-i:[A-Z]{2,4})) courses?\b", r"any 100-level \1 course"),
+        (r"\bone course in ((?-i:[A-Z]{2,4}))\b(?! at the)", r"any 100-level \1 course"),
+    ]
+    for pat, repl in level_rules:
+        if re.search(pat, s, flags=re.I):
+            s = re.sub(pat, repl, s, count=0, flags=re.I)
+            note("level phrase read as 'any course at that level or above'")
+    s = re.sub(r"\bany (\d{3})-level ([a-z]{2,4}) course", lambda m: f"any {m.group(1)}-level {m.group(2).upper()} course", s)
+    s = re.sub(r"\bat least one of the following\b", "one of the following", s, flags=re.I)
+
+    # A bare number at the start ("150L" after "a grade of C or higher in") is the course's own subject
+    if subject and re.match(r"^\s*\d{3}[A-Z]?\b", s):
+        s = f"{subject} " + s.strip()
+
+    # Tidy leftover separators
+    s = re.sub(r"\s+", " ", s)
+    s = re.sub(r"\s*([,;])(\s*[,;])+", r"\1", s)
+    s = re.sub(r"(?:\b(?:and|or)\s*)+$|^\s*(?:and|or)\b", "", s.strip(" ,;")).strip(" ,;")
+    s = re.sub(r"\band\s*([,;])", r"\1", s)
+    coreq = coreq.strip(" ,;")
+    return CleanedPrereq(s, coreq, standing, notes)

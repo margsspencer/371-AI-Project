@@ -85,6 +85,7 @@ class Catalog:
     core: list[CoreCategory]
     rules: dict[str, DegreeRule]
     exclusions: list[ProgramExclusion]
+    subjects: dict[str, str] = field(default_factory=dict)    # {"CSC": "Computer Science", ...}
 
     def rule(self, key: str) -> float:
         """Return a degree rule's value; raises KeyError if it wasn't found in the Bulletin."""

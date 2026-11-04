@@ -98,8 +98,8 @@ def save_catalog(catalog: Catalog, path: Path | None = None) -> Path:
             cur.execute("INSERT OR IGNORE INTO exclusive_pair VALUES (?,?)", tuple(sorted((c.id, other))))
 
     for p in catalog.programs.values():
-        cur.execute("INSERT INTO program VALUES (?,?,?,?,?,?,?,?)",
-                    (p.id, year, p.name, p.type, p.degree, p.subject, p.intro, p.source_key))
+        cur.execute("INSERT INTO program VALUES (?,?,?,?,?,?,?,?,?)",
+                    (p.id, year, p.name, p.type, p.degree, p.subject, p.intro, p.source_key, p.school))
         for gi, g in enumerate(p.groups):
             cur.execute("INSERT INTO requirement_group (program_id, label, sort_order) VALUES (?,?,?)",
                         (p.id, g.label, gi))
@@ -124,6 +124,8 @@ def save_catalog(catalog: Catalog, path: Path | None = None) -> Path:
             cnf_to_json(k.course_cnf), k.timing, int(k.placeholder), k.rules_note, k.source, k.needs_review))
     for r in catalog.rules.values():
         cur.execute("INSERT INTO degree_rule VALUES (?,?,?,?)", (r.key, r.value, r.source_key, r.source_text))
+    for code, name in catalog.subjects.items():
+        cur.execute("INSERT INTO subject VALUES (?,?)", (code, name))
     con.commit()
     con.close()
     return path
@@ -162,8 +164,9 @@ def load_catalog(path: Path | None = None) -> Catalog:
             exclusive_with=exclusive.get(cid, []), notes=json.loads(notes), source_key=source_key)
 
     programs = {}
-    for pid, _, name, ptype, degree, subject, intro, source_key in cur.execute("SELECT * FROM program").fetchall():
-        prog = Program(pid, name, ptype, degree, subject, intro, source_key)
+    for pid, _, name, ptype, degree, subject, intro, source_key, school in cur.execute(
+            "SELECT * FROM program").fetchall():
+        prog = Program(pid, name, ptype, degree, subject, intro, source_key, school=school)
         for gid, label in cur.execute("SELECT id, label FROM requirement_group WHERE program_id=? "
                                       "ORDER BY sort_order", (pid,)).fetchall():
             group = RequirementGroup(label)
@@ -187,5 +190,6 @@ def load_catalog(path: Path | None = None) -> Catalog:
                                  course_cnf=cnf_from_json(cnf), timing=timing, placeholder=bool(placeholder),
                                  rules_note=note, source=source, needs_review=review))
     rules = {k: DegreeRule(k, v, sk, st) for k, v, sk, st in cur.execute("SELECT * FROM degree_rule")}
+    subjects = dict(cur.execute("SELECT code, name FROM subject").fetchall())
     con.close()
-    return Catalog(year, courses, programs, core, rules, exclusions)
+    return Catalog(year, courses, programs, core, rules, exclusions, subjects)

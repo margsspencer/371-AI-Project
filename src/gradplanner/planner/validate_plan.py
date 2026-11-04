@@ -13,6 +13,7 @@ from __future__ import annotations
 from gradplanner.models import Catalog
 from gradplanner.parser.prereq import cnf_satisfied, cnf_to_text, unmet_clauses
 from gradplanner.planner.plan import Plan
+from gradplanner.planner.precheck import unplannable_needs
 from gradplanner.planner.requirements import (
     PlannerSettings, core_needs, countable_hours, course_counts_for_core, fits_hours_rule, load_settings,
     program_needs, rule_or, schedulable_reason,
@@ -25,7 +26,7 @@ STANDING_RULES = {"sophomore": "standing_sophomore_hours", "junior": "standing_j
 
 def validate_plan(plan: Plan, catalog: Catalog, student: StudentProfile,
                   settings: PlannerSettings | None = None) -> list[str]:
-    settings = settings or load_settings()
+    settings = settings or load_settings(catalog)
     problems: list[str] = []
     program = catalog.programs[student.program]
     done = {c.course: c.source for c in student.finished if c.course in catalog.courses}
@@ -99,8 +100,11 @@ def validate_plan(plan: Plan, catalog: Catalog, student: StudentProfile,
     # --- major / minor
     excluded = catalog.excluded_from(program.id)
     hours_rule_use: dict[str, list[str]] = {}
+    advisor_only = unplannable_needs(catalog, student)     # the plan can't fill these; the audit shows them
     for need in program_needs(program):
         it = need.item
+        if need.key in advisor_only:
+            continue
         if it.kind in ("course", "choose"):
             got = [o for o in it.options if o in everything and not (o in excluded and excluded[o] is None)]
             if len(got) < it.n:

@@ -163,3 +163,84 @@ was true, and what we did about it.
 26. **"In progress" courses.** Students plan mid-semester, so profiles now
     have `in_progress:`. The audit shows them separately; the planner
     assumes they are passed and says so in a note.
+
+## 2026-11-03: Milestone 5 (career recommender)
+
+27. **Results for the sample careers.** Machine learning → CSC 375, 374,
+    371; cybersecurity → CSC 348, 341, 343; software → CSC 331, 321; data
+    science → STA 111, 362, 112, CSC 374. Tests check these on the real data.
+
+28. **Small text details mattered more than the algorithm.**
+    - Prerequisite sentences ("P- CSC 201") are cut from descriptions, or
+      every course that needs CSC 201 would "match" CSC 201.
+    - A tiny stemmer (networks → network, statistical ≈ statistics).
+    - Two-word phrases ("neural networks") only from words that are next to
+      each other. A first version joined words across a dropped "and",
+      producing phrases like "network deep" in the explanations.
+    - Catalog boilerplate ("students", "topics", "introduction") is ignored.
+
+29. **The catalog limits the recommender.** "Game developer" finds only
+    weak matches (geometry, GPU programming) because the 2026-27 catalog has
+    no graphics course. The script says so when the best score is low
+    instead of pretending.
+
+30. **Planner link.** Relevance scores (0-100) lower the cost of an
+    elective in the solver's objective, so career-relevant courses fill the
+    "12 h of CSC 300+" rule. Explicit `interests` still win.
+
+31. **Not done (cut list #1):** the optional LLM rewrite of the reason
+    sentence. The template reasons are clear enough for the demo.
+
+## 2026-11-03: All departments and programs (scope change)
+
+The team asked for every major and minor for the demo. Plan: time-boxed to
+11/12, College majors/minors plus the School of Business; certificates,
+concentrations, and self-designed majors are out.
+
+32. **Discovery instead of a hand-typed list.** Three index pages (departments,
+    business programs, Courses A-Z) list everything: 57 departments, 132
+    program pages, 78 subjects, 2,551 courses. About 330 polite requests;
+    8 failed on network hiccups and worked on a re-run (the cache makes
+    re-runs cheap).
+
+33. **Prerequisites across all departments.** Of 802 prerequisite
+    sentences, 218 failed with the CS-only parser. A cleanup step rewrites
+    about 15 common styles first ("A / B", "with a C or better", "or
+    equivalent", "200-level course", "junior or senior standing",
+    "P or C- X", "A, B, or C", ranges like "SPA 310 - SPA 319", "any two of
+    the following"). Now 10 fail; they are flagged, never dropped.
+    *Lesson:* look at all the failures before writing rules; 15 patterns
+    covered 95% of them.
+
+34. **Program tables vary much more than course text.** Biology's B.S. has a
+    "Choose three of the following" row that *links* to a list further down
+    the page; Philosophy says "one course from each of the following groups"
+    with each group in its own table; Engineering includes a sample
+    schedule table that must not be read as requirements. Each of these
+    first produced a confidently wrong reading (e.g. all 14 options becoming
+    required courses), caught only by running the planner on every program.
+
+35. **Loose readings are worse than "advisor review".** A generic rule
+    ("Select 24 hours in Greek" -> 24 h of GRK) helped many programs, but
+    its first version read "two 200 or 300 level courses" as 900 hours and
+    "Art History" as the History department. We now reject rows with extra
+    conditions ("including at least...", "must", "or one ...") and leave
+    them for an advisor. Every automatic reading is flagged "Confirm" in the
+    validation report.
+
+36. **One unplannable course shouldn't sink the plan.** Required courses that
+    need permission or a human-checked prerequisite (e.g. CHM 390) used to
+    make the whole plan "impossible". Now the planner plans everything else
+    and adds a note; the audit shows that line as remaining.
+
+37. **Explanations name the requirement.** Each major requirement has its own
+    on/off switch, so "no plan" says e.g. "the requirement 'BEM 388'
+    conflicts with prerequisites" instead of "the major conflicts". That is
+    how we found BEM 211's corequisite "BEM 287 (For BEM majors only)" being
+    applied to finance students.
+
+38. **Divisions for every subject.** Subject names from Courses A-Z are
+    matched to the division department lists (e.g. Biology -> Division V);
+    three names that differ (Religion, WGS, Politics) are in
+    team_decisions.yaml. Subjects that match nothing don't count toward a
+    division automatically; the plan uses a generic slot instead.

@@ -1,7 +1,8 @@
-# Graduation Calendar Planner (WFU CS): CSC 371 AI Project
+# Graduation Calendar Planner (WFU): CSC 371 AI Project
 
-Plans a semester-by-semester path to graduation for Wake Forest Computer
-Science students (B.S., B.A., minor), using the official
+Plans a semester-by-semester path to graduation for Wake Forest students in
+any College major or minor or School of Business program (122 programs; see
+"Coverage" below), using the official
 [2026-2027 Undergraduate Bulletin](https://bulletin.wfu.edu/undergraduate/)
 as its only source of rules and courses.
 
@@ -30,10 +31,27 @@ pytest -q                         # all tests should pass
 ## Build the data
 
 ```bash
-python scripts/scrape.py          # downloads ~10 Bulletin pages once (2 s apart), caches in data/raw/
+python scripts/scrape.py --all    # finds and downloads ~330 Bulletin pages once (2 s apart, ~11 min), cached in data/raw/
 python scripts/build_db.py        # parses everything -> data/bulletin_2026-2027.db + data/validation_report.md
-python scripts/show.py "CSC 374"  # look up a course, a program (CSC-BS), or "core"
+python scripts/show.py "CSC 374"  # look up a course, a program (CSC-BS, BIO-BS, FIN-BS), or "core"
+python scripts/coverage.py        # tries a plan in every program -> data/coverage_report.md (~20 min)
 ```
+
+Without `--all`, only the CS pages are downloaded and only the CS programs are built.
+
+### Coverage
+
+Each program's requirement table is read automatically, and each gets a level:
+- **full**: every requirement row was understood and is planned.
+- **partial**: some rows are written in a way the parser can't check (e.g.
+  "Option 1 / Option 2", portfolios, auditions). Those show as "advisor review"
+  in the audit; everything else is planned.
+- **none**: the page describes requirements in paragraphs (e.g. the History
+  minor); only the core curriculum is planned.
+
+`data/coverage_report.md` lists every program with its level and whether a
+plan was found and passed the independent check. Certificates, concentrations,
+and self-designed majors are out of scope.
 
 `scripts/validate_data.py` writes only the report, without rebuilding the database.
 
@@ -48,6 +66,21 @@ Prints each semester (courses, core "choose a course" slots, free electives,
 and what each counts toward), notes to check with an advisor, and the result
 of the independent plan check. If no plan fits, it says why. Profiles are
 YAML files with **fake data only**; copy a sample to make a new one.
+
+## Career recommendations
+
+```bash
+python scripts/recommend.py --list                           # career pick-list
+python scripts/recommend.py --career machine-learning-engineer
+python scripts/recommend.py --text "robotics and computer vision"
+```
+
+Ranks courses the student could still take by how well their Bulletin
+description matches the career (TF-IDF word matching, score 0-100), with the
+matching words and a quoted sentence as the reason. Add `career:` and/or
+`career_text:` to a profile and `scripts/plan.py` will prefer those courses
+when it picks electives. Career keyword lists are in
+`src/gradplanner/recommender/careers.yaml`.
 
 ## Degree audit
 
@@ -64,7 +97,7 @@ profile; the planner assumes they are passed.
 ### Fixing data by hand (`data/overrides/`)
 | File | What it does |
 |---|---|
-| `team_decisions.yaml` | Rules the team decided that are not on the Bulletin pages (QR requirement, default offering pattern, and/or rule), each with its source |
+| `team_decisions.yaml` | Rules the team decided that are not on the Bulletin pages (QR requirement, default offering pattern, and/or rule, core slot hours, subject name aliases, subject-to-division names), each with its source |
 | `prereq_overrides.yaml` | Replaces a course's parsed prerequisite. Same syntax as the Bulletin; `[brackets]` = a condition a human must check |
 | `offerings.csv` | When a course is offered. `terms` is `fall`, `spring`, `summer`, separated by `;`. `year_parity` is `any`, `odd`, or `even` |
 
@@ -87,6 +120,7 @@ src/gradplanner/
   planner/        model.py (CP-SAT solver), validate_plan.py (independent check),
                   precheck.py ("no plan" reasons), student.py (profiles), terms.py
   audit/          audit.py: requirement checklist (works with or without a plan)
+  recommender/    tfidf.py (career matching), careers.yaml (pick-list keywords)
 scripts/          command-line entry points
 samples/          fictional student profiles (YAML)
 tests/            pytest (synthetic fixtures only, no real student data)

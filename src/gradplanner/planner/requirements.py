@@ -8,6 +8,7 @@ bug in one is caught by the other.
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, field
 
 import yaml
@@ -27,10 +28,14 @@ class PlannerSettings:
         return self.placeholder_hours.get(category_id, self.placeholder_hours.get("default", 3))
 
 
-def load_settings(overrides_dir=config.OVERRIDES_DIR) -> PlannerSettings:
+def load_settings(catalog: Catalog | None = None, overrides_dir=config.OVERRIDES_DIR) -> PlannerSettings:
+    """Planner settings from team_decisions.yaml. Subject -> department names come from the
+    catalog's subject list (Courses A-Z), with the team file's entries taking precedence."""
     team = yaml.safe_load((overrides_dir / "team_decisions.yaml").read_text()) or {}
     hours = {k: float(v) for k, v in (team.get("placeholder_hours") or {}).items() if k != "source"}
-    return PlannerSettings(hours or {"default": 3.0}, dict(team.get("subject_departments") or {}))
+    departments = dict(catalog.subjects) if catalog else {}
+    departments.update(team.get("subject_departments") or {})
+    return PlannerSettings(hours or {"default": 3.0}, departments)
 
 
 # ---------------------------------------------------------------------------
@@ -69,8 +74,12 @@ def countable_hours(course: Course, program_id: str, catalog: Catalog) -> float:
 
 def fits_hours_rule(course: Course, need: ProgramNeed, program_id: str, catalog: Catalog) -> bool:
     it = need.item
-    return (it.kind == "hours" and course.subject == it.subject and course.level >= (it.min_level or 0)
-            and course.id not in need.listed_courses and countable_hours(course, program_id, catalog) > 0)
+    if it.kind != "hours" or countable_hours(course, program_id, catalog) <= 0:
+        return False
+    if it.options:                        # "Select 9 hours of the following: ..."
+        return course.id in it.options
+    return (course.subject in (it.subject or "").split("|") and course.level >= (it.min_level or 0)
+            and course.id not in need.listed_courses)
 
 
 # ---------------------------------------------------------------------------
@@ -96,7 +105,8 @@ class CoreNeed:
 
 def division_subjects(category: CoreCategory, settings: PlannerSettings) -> set[str]:
     depts = category.departments or ""
-    return {subj for subj, name in settings.subject_departments.items() if name in depts}
+    return {subj for subj, name in settings.subject_departments.items()
+            if name and re.search(rf"\b{re.escape(name)}\b", depts)}
 
 
 def course_counts_for_core(course: Course, need: CoreNeed, catalog: Catalog, settings: PlannerSettings,
@@ -144,7 +154,8 @@ def schedulable_reason(course: Course) -> str | None:
         return "credit hours unknown"
     if not course.offerings:
         return "no offering pattern"
-    for clause in course.prereq:
-        if all(isinstance(a, ManualAtom) for a in clause):
-            return "prerequisite needs a human check: " + " or ".join(str(a) for a in clause)
+    for kind, cnf in (("prerequisite", course.prereq), ("corequisite", course.coreq)):
+        for clause in cnf:
+            if all(isinstance(a, ManualAtom) for a in clause):
+                return f"{kind} needs a human check: " + " or ".join(str(a) for a in clause)
     return None
