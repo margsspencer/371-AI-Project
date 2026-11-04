@@ -13,3 +13,5 @@ where = ["src"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+# OR-Tools' protobuf dependency warns about Python 3.14; not our code.
+filterwarnings = ["ignore:Type google._upb._message:DeprecationWarning"]

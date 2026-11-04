@@ -19,3 +19,21 @@ offering_default:
 prereq_mixed_and_or:
   rule: "'A and B or C' (no parentheses) means A and (B or C): every course joined by 'or' is an option"
   source: "team decision 2026-10-26"
+
+# Used by the planner (milestone 3).
+placeholder_hours:
+  # Credit hours of a core "slot" the planner reserves for a course outside our
+  # catalog (we only scrape CSC/MTH/STA, so FYS, WRI, HES, language, and most
+  # divisionals are generic slots).
+  default: 3
+  BASIC-WRI: 4      # Bulletin: "4 writing credits" (WRI 111, or WRI 109 + 110)
+  BASIC-HES: 1      # ASSUMPTION (team, 2026-11-03): Bulletin implies HES 100 is under 3 h but gives no number. Confirm.
+  source: "team decision 2026-11-03"
+
+subject_departments:
+  # Bulletin department name for each subject code we scrape. Divisional
+  # requirements list departments by name, so this decides which division a
+  # course counts toward.
+  CSC: Computer Science
+  MTH: Mathematics
+  STA: Statistical Sciences

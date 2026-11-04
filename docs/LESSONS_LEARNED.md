@@ -113,3 +113,36 @@ was true, and what we did about it.
 18. **Ambiguity that remains:** the B.A. and minor say "Select three hours at
     the 191-level or higher" without naming a subject. We assume CSC (the
     program's department) and flag it NEEDS HUMAN REVIEW.
+
+## 2026-11-03: Milestone 3 (planner + plan checker)
+
+19. **Two independent checks agree.** The solver (CP-SAT) builds the plan;
+    `validate_plan.py` re-checks it with plain loops. To test the checker
+    we switched off the solver's prerequisite rules on purpose: the checker
+    flagged every out-of-order course. *Lesson:* a second, simpler method
+    is cheap insurance, and it also works on hand-edited plans.
+
+20. **"Good" is found fast, "provably best" is not.** On the real B.S.
+    data the solver has a near-best plan in about 2 seconds but cannot
+    prove it optimal in 30 (the remaining gap is tiny ordering
+    preferences). Default time limit is 10 s, and the output says when the
+    plan wasn't proven best.
+
+21. **"No plan" needs a reason.** Plain-Python pre-checks catch the common
+    cases with specific sentences (prerequisite chain too long, not enough
+    hours even at the maximum load, a required course that needs
+    permission). For the rest, each rule group has an on/off switch; we
+    switch groups off one at a time and keep only the ones that still
+    conflict. A first version listed all five groups, which told the
+    student nothing.
+
+22. **Elective-hours rules must not double-count.** "12 h of CSC 300+"
+    can't use CSC 301 or CSC 399, which are required on their own, and in
+    the B.A. one course can't fill both "3 h at 200+" and "6 h at 300+".
+    The model gives each course to at most one hours rule.
+
+23. **Assumptions we had to make** (in `team_decisions.yaml`, confirm):
+    HES 100 is 1 h; a course may count toward the major, one division, one
+    21CS category, and QR at once; if a timing deadline already passed
+    (e.g. FYS for a junior), the slot goes in the first planned term with a
+    note instead of making the plan impossible.

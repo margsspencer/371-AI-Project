@@ -1,0 +1,28 @@
+# FICTIONAL student. Rising junior, CSC 111 from AP, some core done.
+name: Jordan Sample (fictional)
+program: CSC-BS
+entry_term: Fall 2025
+next_term: Fall 2027
+graduation_term: Spring 2029
+max_hours_per_term: 17
+language_courses_needed: 0
+completed:
+  - {course: CSC 111, source: ap}
+  - {course: CSC 112}
+  - {course: MTH 111}
+  - {course: MTH 112}
+  - {course: MTH 117}
+  - {course: CSC 201}
+  - {course: STA 111}
+outside_courses:
+  - {name: FYS 100, hours: 3, counts_for: BASIC-FYS}
+  - {name: WRI 111, hours: 4, counts_for: BASIC-WRI}
+  - {name: HES 100, hours: 1, counts_for: BASIC-HES}
+  - {name: SPA 212, hours: 3, counts_for: BASIC-LANG}
+  - {name: HST 101, hours: 3, counts_for: DIV-I}
+  - {name: PHI 111, hours: 3, counts_for: DIV-I}
+  - {name: ECN 150, hours: 3, counts_for: DIV-IV}
+  - {name: PSY 151, hours: 3, counts_for: DIV-IV}
+  - {name: ENG 175, hours: 3, counts_for: DIV-II}
+  - {name: Elective credits, hours: 9}
+interests: [CSC 341]

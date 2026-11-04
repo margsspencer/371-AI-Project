@@ -37,6 +37,18 @@ python scripts/show.py "CSC 374"  # look up a course, a program (CSC-BS), or "co
 
 `scripts/validate_data.py` writes only the report, without rebuilding the database.
 
+## Make a plan
+
+```bash
+python scripts/plan.py samples/sam_first_year_bs.yaml     # first-year B.S. student, 8 semesters
+python scripts/plan.py samples/jordan_junior_bs.yaml      # rising junior with AP + core credit
+```
+
+Prints each semester (courses, core "choose a course" slots, free electives,
+and what each counts toward), notes to check with an advisor, and the result
+of the independent plan check. If no plan fits, it says why. Profiles are
+YAML files with **fake data only**; copy a sample to make a new one.
+
 ### Fixing data by hand (`data/overrides/`)
 | File | What it does |
 |---|---|
@@ -60,7 +72,10 @@ src/gradplanner/
   pipeline.py     cached pages + overrides -> Catalog
   db/             SQLite schema + save/load
   validation.py   checks that flag data needing a human fix
+  planner/        model.py (CP-SAT solver), validate_plan.py (independent check),
+                  precheck.py ("no plan" reasons), student.py (profiles), terms.py
 scripts/          command-line entry points
+samples/          fictional student profiles (YAML)
 tests/            pytest (synthetic fixtures only, no real student data)
 data/overrides/   hand-made fixes to Bulletin data (committed)
 ```
