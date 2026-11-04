@@ -106,11 +106,13 @@ class _Builder:
 
         # Completed courses we know about, and hours already earned.
         self.done: dict[str, str] = {}
-        for c in self.st.completed:
+        for c in self.st.finished:
             if c.course in self.cat.courses:
                 self.done[c.course] = c.source
             else:
                 plan.notes.append(f"{c.course} is not in our catalog; list it under outside_courses instead.")
+        if self.st.in_progress:
+            plan.notes.append("Assumes you pass your current courses: " + ", ".join(self.st.in_progress) + ".")
         self.done_hours = (sum(self.cat.courses[c].credits for c in self.done)
                            + sum(o.hours for o in self.st.outside_courses))
 

@@ -49,6 +49,18 @@ and what each counts toward), notes to check with an advisor, and the result
 of the independent plan check. If no plan fits, it says why. Profiles are
 YAML files with **fake data only**; copy a sample to make a new one.
 
+## Degree audit
+
+```bash
+python scripts/audit.py samples/jordan_junior_bs.yaml          # what's done and what's left
+python scripts/audit.py samples/jordan_junior_bs.yaml --plan   # also count a generated plan
+```
+
+One line per requirement (major, co-requirements, core, 120 hours), marked
+done, in progress, planned, remaining, or advisor review, with the courses
+used. Courses the student is taking now go under `in_progress:` in the
+profile; the planner assumes they are passed.
+
 ### Fixing data by hand (`data/overrides/`)
 | File | What it does |
 |---|---|
@@ -74,6 +86,7 @@ src/gradplanner/
   validation.py   checks that flag data needing a human fix
   planner/        model.py (CP-SAT solver), validate_plan.py (independent check),
                   precheck.py ("no plan" reasons), student.py (profiles), terms.py
+  audit/          audit.py: requirement checklist (works with or without a plan)
 scripts/          command-line entry points
 samples/          fictional student profiles (YAML)
 tests/            pytest (synthetic fixtures only, no real student data)

@@ -101,7 +101,7 @@ def precheck(catalog: Catalog, student: StudentProfile, settings: PlannerSetting
         blocking.append(f"Even at the maximum load you would have {earned + capacity:g} of {total:g} hours "
                         f"by {terms[-1]}. Add semesters, summer terms, or raise the hour limit.")
 
-    outside = sum(catalog.courses[c.course].credits for c in student.completed
+    outside = sum(catalog.courses[c.course].credits for c in student.finished
                   if c.source != "wfu" and c.course in catalog.courses)
     outside += sum(o.hours for o in student.outside_courses if o.source != "wfu")
     if outside > rule_or(catalog, "max_outside_hours", 30):

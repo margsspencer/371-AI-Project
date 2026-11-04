@@ -146,3 +146,20 @@ was true, and what we did about it.
     21CS category, and QR at once; if a timing deadline already passed
     (e.g. FYS for a junior), the slot goes in the first planned term with a
     note instead of making the plan impossible.
+
+## 2026-11-03: Milestone 4 (degree audit)
+
+24. **A third view of the same rules.** The audit matches courses to
+    requirements with simple greedy steps (no solver): done courses first,
+    the strictest elective-hours rule picks first, a 21CS category with
+    fewer candidates picks first. Running it on a solver plan gives
+    "0 remaining", so planner, checker, and audit agree.
+
+25. **Hand-checked sample.** We worked out the junior sample's checklist by
+    hand from the Bulletin before running the code; the test compares all
+    29 lines. The tricky line: AP credit for CSC 111 counts for the major
+    but not for Division V, which is instead met by CSC 112 + MTH 111.
+
+26. **"In progress" courses.** Students plan mid-semester, so profiles now
+    have `in_progress:`. The audit shows them separately; the planner
+    assumes they are passed and says so in a note.

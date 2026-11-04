@@ -28,7 +28,7 @@ def validate_plan(plan: Plan, catalog: Catalog, student: StudentProfile,
     settings = settings or load_settings()
     problems: list[str] = []
     program = catalog.programs[student.program]
-    done = {c.course: c.source for c in student.completed if c.course in catalog.courses}
+    done = {c.course: c.source for c in student.finished if c.course in catalog.courses}
 
     # --- terms are the student's terms, in order, within the deadline
     allowed = student.plan_terms()

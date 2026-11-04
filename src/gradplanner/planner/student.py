@@ -11,6 +11,7 @@ go into the database. Example:
     max_hours_per_term: 17
     completed:
       - {course: CSC 111, source: ap}
+    in_progress: [CSC 112]         # enrolled this semester; planning assumes they pass
     outside_courses:               # courses not in our catalog (other departments)
       - {name: HST 101, hours: 3, counts_for: DIV-I}
     interests: [CSC 374]           # electives to prefer (later: the recommender fills this)
@@ -53,6 +54,7 @@ class StudentProfile:
     summer_max_hours: float = 8
     language_courses_needed: int = 1    # language courses still needed to finish one 200-level course
     completed: list[CompletedCourse] = field(default_factory=list)
+    in_progress: list[str] = field(default_factory=list)   # current semester, before next_term
     outside_courses: list[OutsideCourse] = field(default_factory=list)
     interests: list[str] = field(default_factory=list)
 
@@ -69,8 +71,15 @@ class StudentProfile:
         return term.academic_year - self.entry_term.academic_year
 
     @property
+    def finished(self) -> list[CompletedCourse]:
+        """Completed plus in-progress courses. The planner assumes in-progress courses are passed."""
+        done = {c.course for c in self.completed}
+        return self.completed + [CompletedCourse(c) for c in self.in_progress if c not in done]
+
+    @property
     def completed_ids(self) -> set[str]:
-        return {c.course for c in self.completed}
+        """Ids of completed and in-progress courses (what the planner treats as done)."""
+        return {c.course for c in self.finished}
 
 
 def profile_from_dict(d: dict) -> StudentProfile:
@@ -85,6 +94,7 @@ def profile_from_dict(d: dict) -> StudentProfile:
         summer_max_hours=d.get("summer_max_hours", 8),
         language_courses_needed=d.get("language_courses_needed", 1),
         completed=[CompletedCourse(**c) for c in d.get("completed", [])],
+        in_progress=list(d.get("in_progress", [])),
         outside_courses=[OutsideCourse(**c) for c in d.get("outside_courses", [])],
         interests=list(d.get("interests", [])),
     )
