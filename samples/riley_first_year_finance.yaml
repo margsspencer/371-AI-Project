@@ -1,0 +1,15 @@
+# FICTIONAL student. First-year pre-business student planning a Finance major
+# and an Economics minor. School of Business courses start in sophomore
+# spring (after admission); ACC 111 and BEM 201 are admission prerequisites.
+name: Riley Example (fictional)
+majors: [FIN-BS]
+minors: [ECN-MINOR]
+entry_term: Fall 2026
+next_term: Fall 2026
+graduation_term: Spring 2030
+max_hours_per_term: 17
+language_courses_needed: 1
+completed: []
+outside_courses: []
+interests: []
+career: financial-analyst

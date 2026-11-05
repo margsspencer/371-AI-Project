@@ -20,9 +20,30 @@ from gradplanner.planner.student import StudentProfile
 
 
 @dataclass
+class BusinessRule:
+    subjects: set[str]
+    admitted_year: int = 2              # 1 = first year, 2 = sophomore, ...
+    admitted_season: str = "spring"
+    extra_programs: set[str] = field(default_factory=set)
+
+
+@dataclass
+class AbroadRules:
+    min_hours: float = 12
+    default_program_hours: float = 6
+    business_program_hours: float = 6
+    subject_hours: dict[str, dict] = field(default_factory=dict)   # {"SOC": {"hours": 6, ...}}
+    categories: set[str] = field(default_factory=set)               # core categories abroad courses may fill
+    notes: list[str] = field(default_factory=list)
+
+
+@dataclass
 class PlannerSettings:
     placeholder_hours: dict[str, float]
     subject_departments: dict[str, str]
+    business: BusinessRule | None = None
+    not_double_majors: list[tuple[set[str], set[str], str]] = field(default_factory=list)
+    abroad: AbroadRules = field(default_factory=AbroadRules)
 
     def slot_hours(self, category_id: str) -> float:
         return self.placeholder_hours.get(category_id, self.placeholder_hours.get("default", 3))
@@ -35,7 +56,17 @@ def load_settings(catalog: Catalog | None = None, overrides_dir=config.OVERRIDES
     hours = {k: float(v) for k, v in (team.get("placeholder_hours") or {}).items() if k != "source"}
     departments = dict(catalog.subjects) if catalog else {}
     departments.update(team.get("subject_departments") or {})
-    return PlannerSettings(hours or {"default": 3.0}, departments)
+    business = None
+    if b := team.get("business_school"):
+        when = b.get("admitted_term") or {}
+        business = BusinessRule(set(b.get("subjects") or []), int(when.get("year", 2)),
+                                str(when.get("season", "spring")), set(b.get("extra_programs") or []))
+    pairs = [(set(r["a"]), set(r["b"]), r.get("source", "")) for r in team.get("not_double_majors") or []]
+    a = team.get("study_abroad") or {}
+    abroad = AbroadRules(float(a.get("min_hours", 12)), float(a.get("default_program_hours", 6)),
+                         float(a.get("business_program_hours", 6)), dict(a.get("subject_hours") or {}),
+                         set(a.get("categories") or []), list(a.get("notes") or []))
+    return PlannerSettings(hours or {"default": 3.0}, departments, business, pairs, abroad)
 
 
 # ---------------------------------------------------------------------------
@@ -52,6 +83,10 @@ class ProgramNeed:
     # required on their own, so they can't also fill an elective-hours rule.
     listed_courses: set[str] = field(default_factory=set)
 
+    @property
+    def program_id(self) -> str:
+        return self.key.split(":", 1)[0]
+
 
 def program_needs(program: Program) -> list[ProgramNeed]:
     listed = {c for g in program.groups for it in g.items if it.kind in ("course", "choose") for c in it.options}
@@ -61,6 +96,114 @@ def program_needs(program: Program) -> list[ProgramNeed]:
             needs.append(ProgramNeed(f"{program.id}:{gi}.{ii}", f"{group.label}: {item.label}", item,
                                      listed if item.kind == "hours" else set()))
     return needs
+
+
+def student_needs(catalog: Catalog, student: StudentProfile) -> list[ProgramNeed]:
+    """Requirements of every major and minor the student has, in order."""
+    return [n for pid in student.programs for n in program_needs(catalog.programs[pid])]
+
+
+def needed_courses(catalog: Catalog, student: StudentProfile) -> set[str]:
+    """Courses named by a required-course or choose-list row in any of the student's programs."""
+    return {o for n in student_needs(catalog, student) if n.item.kind in ("course", "choose") for o in n.item.options}
+
+
+def program_problems(catalog: Catalog, student: StudentProfile, settings: PlannerSettings) -> list[str]:
+    """Combinations the Bulletin doesn't allow (e.g. Biology with Neuroscience), and unknown ids."""
+    out = []
+    unknown = [p for p in student.programs if p not in catalog.programs]
+    if unknown:
+        return [f"Unknown program(s): {', '.join(unknown)}."]
+    if len(set(student.programs)) != len(student.programs):
+        out.append("The same program is listed twice.")
+    majors = [p for p in student.programs if catalog.programs[p].type == "major"]
+    for i, a in enumerate(majors):
+        for b in majors[i + 1:]:
+            for left, right, source in settings.not_double_majors:
+                if (a in left and b in right) or (a in right and b in left):
+                    out.append(f"{catalog.programs[a].name} and {catalog.programs[b].name} can't be a double "
+                               f"major (Bulletin, {source}).")
+                    break
+    return out
+
+
+ABROAD_COURSE_HOURS = 3
+
+
+def abroad_program_cap(catalog: Catalog, program_id: str, settings: PlannerSettings, affiliate: bool) -> float:
+    """Hours from study abroad that may count toward one major or minor."""
+    rules, prog = settings.abroad, catalog.programs[program_id]
+    business = settings.business
+    if prog.school == "Business" or (business and program_id in business.extra_programs):
+        return rules.business_program_hours
+    sub = rules.subject_hours.get(prog.subject)
+    if sub and (affiliate or not sub.get("affiliate_only")):
+        return float(sub["hours"])
+    return rules.default_program_hours
+
+
+def abroad_category_ok(category: CoreCategory, settings: PlannerSettings, affiliate: bool) -> bool:
+    """Can an abroad course count toward this core category? (No 21CS from transfer credit.)"""
+    if category.id not in settings.abroad.categories:
+        return False
+    return not (affiliate and category.family == "21CS")
+
+
+def abroad_problems(student: StudentProfile) -> list[str]:
+    """Abroad semesters that can't work, in plain English."""
+    out, terms = [], student.plan_terms()
+    seen = set()
+    for a in student.abroad:
+        if a.term in seen:
+            out.append(f"{a.term} is listed twice for study abroad.")
+        seen.add(a.term)
+        if a.term not in terms:
+            out.append(f"Study abroad in {a.term} is outside the semesters being planned "
+                       f"({terms[0]} to {terms[-1]})." if terms else "No semesters to plan.")
+        elif a.program == "affiliate" and student.year_index(a.term) >= 3:
+            out.append(f"{a.term} is in your senior year; the Bulletin requires senior-year work in "
+                       "Wake Forest programs, so choose a Wake Forest program or an earlier semester.")
+    return out
+
+
+def admission_courses(catalog: Catalog) -> set[str]:
+    """Courses listed under "Prerequisites for Admission" on business major pages (taken before admission)."""
+    return {o for p in catalog.programs.values() for g in p.groups if "admission" in g.label.lower()
+            for it in g.items for o in it.options}
+
+
+def is_business_student(catalog: Catalog, student: StudentProfile, settings: PlannerSettings) -> bool:
+    rule = settings.business
+    return bool(rule) and any(catalog.programs[p].school == "Business" or p in rule.extra_programs
+                              for p in student.programs if p in catalog.programs)
+
+
+def before_admission(term, student: StudentProfile, rule: BusinessRule) -> bool:
+    """True if `term` comes before the student's School of Business admission term."""
+    order = {"fall": 0, "spring": 1, "summer": 2}                     # order within a school year
+    year = student.year_index(term) + 1
+    return (year, order[term.season]) < (rule.admitted_year, order[rule.admitted_season])
+
+
+def business_reason(course: Course, term, student: StudentProfile, catalog: Catalog,
+                    settings: PlannerSettings, admission: set[str] | None = None) -> str | None:
+    """Why a School of Business course can't go in `term` (None if it can).
+
+    Business majors: not before admission (sophomore spring), except admission prerequisites.
+    Other students need instructor permission, so only courses their programs require are allowed."""
+    rule = settings.business
+    if not rule or course.subject not in rule.subjects:
+        return None
+    admission = admission_courses(catalog) if admission is None else admission
+    if course.id in admission:
+        return None
+    if is_business_student(catalog, student, settings):
+        if before_admission(term, student, rule):
+            return "is a School of Business course; business majors take these after admission (sophomore spring)"
+        return None
+    if course.id in needed_courses(catalog, student):
+        return None
+    return "is a School of Business course; non-business students need instructor permission"
 
 
 def countable_hours(course: Course, program_id: str, catalog: Catalog) -> float:

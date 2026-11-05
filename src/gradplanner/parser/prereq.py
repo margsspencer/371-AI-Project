@@ -382,6 +382,13 @@ def clean_prereq_text(text: str | None, subject: str | None = None,
     s = re.sub(r"\b([A-Z]{2,4})(\d{3}[A-Z]?)\b", r"\1 \2", s)          # "STA111" -> "STA 111"
     s = re.sub(r"\bAND\b", "and", s)
 
+    # "STA 111, (or similar course, including ANT 380; BIO 380 or STA 311)" -> "STA 111 or ANT 380 or ..."
+    m = re.search(r",?\s*\(or (?:a )?similar course,?\s*including ([^)]*)\)", s, re.I)
+    if m:
+        options = [o.strip() for o in re.split(r"[;,]|\bor\b", m.group(1)) if o.strip()]
+        s = s[:m.start()] + "".join(f" or {o}" for o in options) + s[m.end():]
+        note("'or similar course' read as the listed courses; other similar courses need an advisor")
+
     # Class standing -> a separate field
     m = re.search(r"\b(sophomore|junior|senior)(?: or (?:junior|senior))?(?: major)? (?:standing|status)\b"
                   r"|^\s*(senior) majors\s*$", s, re.I)

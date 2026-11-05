@@ -244,3 +244,32 @@ concentrations, and self-designed majors are out.
     three names that differ (Religion, WGS, Politics) are in
     team_decisions.yaml. Subjects that match nothing don't count toward a
     division automatically; the plan uses a generic slot instead.
+
+39. **Advisor knowledge the Bulletin pages don't show.** A teammate pointed
+    out that business majors can't take School of Business courses until
+    they're admitted in sophomore spring. That admission page isn't one we
+    scrape, so it's a team rule in team_decisions.yaml with its source. We
+    first also required the admission prerequisites (ACC 111, BEM 201) to be
+    finished *before* sophomore spring, but the Bulletin's own prerequisites
+    make that impossible (ACC 111 needs sophomore standing, and BEM 201 needs
+    ACC 111), so we dropped it. A rule that sounds right can conflict with the data.
+
+40. **Several programs at once.** Requirement keys already started with the
+    program id ("CSC-BS:0.3"), so a double major or minor was mostly a loop
+    over programs in the planner, checker, audit, and recommender. Within
+    one program a course fills at most one elective-hours rule; across
+    programs it may count for each. Forbidden pairs are copied by hand from
+    the department pages.
+
+41. **"No plan in time" is not "impossible".** Finance + Computer Science
+    minor in 8 semesters needs about 137 hours against a 136-hour maximum.
+    The solver can't prove that within 2 minutes, so it says "no plan found
+    in time" and suggests more semesters, not "impossible".
+
+42. **Study abroad as slots, not courses.** We don't have abroad course
+    lists, so an abroad semester is planned with 3-hour "abroad course"
+    slots that say what they count toward. The Bulletin gives the general
+    rules (30-hour outside-credit limit, no 21CS from transfer credit,
+    senior year at Wake Forest) and a few department limits (Sociology 6 h,
+    Spanish 3 h from affiliate programs). Most College departments say
+    nothing, so the 6-hour default is a labeled team assumption.

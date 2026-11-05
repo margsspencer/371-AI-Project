@@ -15,8 +15,8 @@ from gradplanner.parser.prereq import cnf_satisfied, cnf_to_text, unmet_clauses
 from gradplanner.planner.plan import Plan
 from gradplanner.planner.precheck import unplannable_needs
 from gradplanner.planner.requirements import (
-    PlannerSettings, core_needs, countable_hours, course_counts_for_core, fits_hours_rule, load_settings,
-    program_needs, rule_or, schedulable_reason,
+    ABROAD_COURSE_HOURS, PlannerSettings, abroad_problems, abroad_program_cap, core_needs, countable_hours, course_counts_for_core, fits_hours_rule, load_settings,
+    program_problems, rule_or, schedulable_reason, student_needs,
 )
 from gradplanner.planner.student import StudentProfile
 
@@ -27,8 +27,7 @@ STANDING_RULES = {"sophomore": "standing_sophomore_hours", "junior": "standing_j
 def validate_plan(plan: Plan, catalog: Catalog, student: StudentProfile,
                   settings: PlannerSettings | None = None) -> list[str]:
     settings = settings or load_settings(catalog)
-    problems: list[str] = []
-    program = catalog.programs[student.program]
+    problems: list[str] = list(program_problems(catalog, student, settings)) + abroad_problems(student)
     done = {c.course: c.source for c in student.finished if c.course in catalog.courses}
 
     # --- terms are the student's terms, in order, within the deadline
@@ -45,6 +44,7 @@ def validate_plan(plan: Plan, catalog: Catalog, student: StudentProfile,
     hours_before = sum(catalog.courses[c].credits for c in done) + sum(o.hours for o in student.outside_courses)
     bulletin_max = rule_or(catalog, "max_hours_per_semester", 17)
     for tp in plan.terms:
+        problems += _abroad_term(tp, student, settings)
         this_term = set(tp.course_ids)
         for cid in tp.course_ids:
             course = catalog.courses.get(cid)
@@ -59,6 +59,9 @@ def validate_plan(plan: Plan, catalog: Catalog, student: StudentProfile,
             if not course.is_offered(tp.term.season, tp.term.year):
                 problems.append(f"{tp.term}: {cid} is not offered then.")
             why = schedulable_reason(course)
+            if why:
+                problems.append(f"{tp.term}: {cid} {why}.")
+            why = _business(course, tp.term, student, catalog, settings)
             if why:
                 problems.append(f"{tp.term}: {cid} {why}.")
             if not cnf_satisfied(course.prereq, have_before):
@@ -94,15 +97,16 @@ def validate_plan(plan: Plan, catalog: Catalog, student: StudentProfile,
             for k in item.counts_toward:
                 if item.kind == "course":
                     counts.setdefault(k, []).append(item.id)
-                elif item.kind == "core_slot":
+                elif item.kind in ("core_slot", "abroad"):
                     slots[k] = slots.get(k, 0) + 1
 
     # --- major / minor
-    excluded = catalog.excluded_from(program.id)
-    hours_rule_use: dict[str, list[str]] = {}
+    hours_rule_use: dict[tuple[str, str], list[str]] = {}
     advisor_only = unplannable_needs(catalog, student)     # the plan can't fill these; the audit shows them
-    for need in program_needs(program):
+    for need in student_needs(catalog, student):
         it = need.item
+        pid = need.program_id
+        excluded = catalog.excluded_from(pid)
         if need.key in advisor_only:
             continue
         if it.kind in ("course", "choose"):
@@ -110,17 +114,18 @@ def validate_plan(plan: Plan, catalog: Catalog, student: StudentProfile,
             if len(got) < it.n:
                 problems.append(f"Not met: {need.label} (need {it.n} of {', '.join(it.options)}).")
         elif it.kind == "hours":
-            total = 0.0
+            total = slots.get(need.key, 0) * ABROAD_COURSE_HOURS            # abroad courses toward this rule
             for cid in counts.get(need.key, []):
                 course = catalog.courses[cid]
-                if not fits_hours_rule(course, need, program.id, catalog):
+                if not fits_hours_rule(course, need, pid, catalog):
                     problems.append(f"{cid} can't count toward {need.label}.")
                     continue
-                hours_rule_use.setdefault(cid, []).append(need.label)
-                total += countable_hours(course, program.id, catalog)
+                hours_rule_use.setdefault((cid, pid), []).append(need.label)
+                total += countable_hours(course, pid, catalog)
             if total < (it.hours or 0):
                 problems.append(f"Not met: {need.label} ({total:g} of {it.hours:g} hours).")
-    for cid, labels in hours_rule_use.items():
+    problems += _abroad_limits(plan, catalog, student, settings)
+    for (cid, _), labels in hours_rule_use.items():
         if len(labels) > 1:
             problems.append(f"{cid} is counted toward more than one hours rule: {'; '.join(labels)}.")
 
@@ -144,12 +149,12 @@ def validate_plan(plan: Plan, catalog: Catalog, student: StudentProfile,
             first_index = student.year_index(allowed[0])
             deadline = max(need.last_year, first_index)
             for tp in plan.terms:
-                if need.id in [i.id for i in tp.items if i.kind == "core_slot"] \
+                if any(need.id in i.counts_toward for i in tp.items if i.kind in ("core_slot", "abroad")) \
                         and student.year_index(tp.term) > deadline:
                     problems.append(f"{tp.term}: {need.category.name} is planned too late ({need.category.timing}).")
         if need.one_per_term:
             for tp in plan.terms:
-                if sum(1 for i in tp.items if i.kind == "core_slot" and i.id == need.id) > 1:
+                if sum(1 for i in tp.items if i.kind in ("core_slot", "abroad") and need.id in i.counts_toward) > 1:
                     problems.append(f"{tp.term}: more than one {need.category.name} course in one term.")
     for (cid, kind), n in per_course_kind.items():
         if kind in ("division", "21cs") and n > 1:
@@ -162,3 +167,90 @@ def validate_plan(plan: Plan, catalog: Catalog, student: StudentProfile,
     if earned < total:
         problems.append(f"Only {earned:g} of {total:g} hours by graduation.")
     return problems
+
+
+def _business(course, term, student: StudentProfile, catalog: Catalog, settings: PlannerSettings) -> str | None:
+    """School of Business timing, checked here with its own code (not the planner's helper)."""
+    rule = settings.business
+    if not rule or course.subject not in rule.subjects:
+        return None
+    for prog in catalog.programs.values():
+        for g in prog.groups:
+            if "admission" in g.label.lower() and any(course.id in it.options for it in g.items):
+                return None                       # an admission prerequisite: open before admission
+    business = any(catalog.programs[p].school == "Business" or p in rule.extra_programs for p in student.programs)
+    if not business:
+        required = any(course.id in it.options for p in student.programs for g in catalog.programs[p].groups
+                       for it in g.items if it.kind in ("course", "choose"))
+        return None if required else "is a School of Business course (needs instructor permission)"
+    if _year_season(term, student) < _admitted(settings):
+        return "is a School of Business course planned before admission (sophomore spring)"
+    return None
+
+
+SEASONS = ["fall", "spring", "summer"]
+
+
+def _year_season(term, student: StudentProfile) -> tuple[int, int]:
+    """(school year 1-4+, season position) of a term for this student."""
+    return term.academic_year - student.entry_term.academic_year + 1, SEASONS.index(term.season)
+
+
+def _admitted(settings: PlannerSettings) -> tuple[int, int]:
+    rule = settings.business
+    return (rule.admitted_year, SEASONS.index(rule.admitted_season)) if rule else (0, 0)
+
+
+def _abroad_term(tp, student: StudentProfile, settings: PlannerSettings) -> list[str]:
+    """An abroad semester has only abroad courses and a full-time load; other semesters have none."""
+    a = student.abroad_in(tp.term)
+    kinds = {i.kind for i in tp.items}
+    if a is None:
+        return [f"{tp.term}: abroad courses in a semester on campus."] if "abroad" in kinds else []
+    out = []
+    if kinds - {"abroad"}:
+        out.append(f"{tp.term}: Wake Forest catalog courses or slots planned while abroad.")
+    if tp.hours < settings.abroad.min_hours:
+        out.append(f"{tp.term}: {tp.hours:g} hours abroad is below a full-time load ({settings.abroad.min_hours:g}).")
+    for item in tp.items:
+        for k in item.counts_toward:
+            if ":" in k:
+                continue                                  # a major/minor rule (limits checked below)
+            if k not in settings.abroad.categories:
+                out.append(f"{tp.term}: an abroad course can't count toward {k}.")
+            elif a.program == "affiliate" and k.startswith("21CS"):
+                out.append(f"{tp.term}: affiliate (transfer) credit can't count toward {k}.")
+    return out
+
+
+def _abroad_limits(plan: Plan, catalog: Catalog, student: StudentProfile, settings: PlannerSettings) -> list[str]:
+    out = []
+    per_program: dict[tuple[str, bool], float] = {}
+    affiliate_hours = 0.0
+    for tp in plan.terms:
+        a = student.abroad_in(tp.term)
+        if a is None:
+            continue
+        if a.program == "affiliate":
+            affiliate_hours += tp.hours
+        for item in tp.items:
+            for k in item.counts_toward:
+                if ":" in k:
+                    pid = k.split(":", 1)[0]
+                    per_program[(pid, False)] = per_program.get((pid, False), 0) + item.hours
+                    if a.program == "affiliate":
+                        per_program[(pid, True)] = per_program.get((pid, True), 0) + item.hours
+    for (pid, affiliate), hours in per_program.items():
+        cap = abroad_program_cap(catalog, pid, settings, affiliate)
+        if hours > cap:
+            kind = "affiliate-program " if affiliate else ""
+            out.append(f"{hours:g} {kind}abroad hours count toward {catalog.programs[pid].name}; the limit is {cap:g}.")
+    if affiliate_hours:
+        earned = (sum(catalog.courses[c.course].credits for c in student.finished
+                      if c.source != "wfu" and c.course in catalog.courses)
+                  + sum(o.hours for o in student.outside_courses if o.source != "wfu"))
+        limit = rule_or(catalog, "max_outside_hours", 30)
+        if earned + affiliate_hours > limit:
+            out.append(f"{earned + affiliate_hours:g} hours of outside credit (AP, transfer, affiliate abroad); "
+                       f"at most {limit:g} count.")
+    return out

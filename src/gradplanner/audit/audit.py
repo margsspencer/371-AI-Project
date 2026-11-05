@@ -42,7 +42,7 @@ class Entry:
     stage: str                 # done | in_progress | planned
     hours: float
     course_id: str | None = None    # set for catalog courses
-    source: str = "wfu"             # wfu | ap | transfer
+    source: str = "wfu"             # wfu | ap | transfer | affiliate (non-Wake study abroad)
     counts_for: str | None = None   # outside courses / slots: the core category they were entered for
     term: str | None = None
 
@@ -99,6 +99,11 @@ def _entries(catalog: Catalog, student: StudentProfile, plan: Plan | None, notes
             for item in tp.items:
                 if item.kind == "course":
                     out.append(Entry(item.id, "planned", item.hours, item.id, term=str(tp.term)))
+                elif item.kind == "abroad":
+                    a = student.abroad_in(tp.term)
+                    out.append(Entry(item.title, "planned", item.hours, None,
+                                     "affiliate" if a and a.program == "affiliate" else "wfu",
+                                     item.counts_toward[0] if item.counts_toward else None, str(tp.term)))
                 else:
                     cat = item.id if item.kind == "core_slot" else None
                     name = "Free elective" if cat is None else f"{plan.labels.get(cat, cat)} course"
@@ -112,7 +117,21 @@ def _entries(catalog: Catalog, student: StudentProfile, plan: Plan | None, notes
 
 
 def _program_lines(catalog: Catalog, student: StudentProfile, entries: list[Entry]) -> list[AuditLine]:
-    program = catalog.programs[student.program]
+    out = []
+    for pid in student.programs:
+        out += _one_program(catalog, catalog.programs[pid], entries, several=len(student.programs) > 1)
+    return out
+
+
+def _section(program, need, several: bool) -> str:
+    """'Major: Required Courses' for one program; 'Computer Science, B.S.: Required Courses' for several."""
+    group = need.label.split(":")[0]
+    if several:
+        return f"{program.name}: {group}" if program.type == "major" else program.name
+    return "Major: " + group if program.type == "major" else "Minor"
+
+
+def _one_program(catalog: Catalog, program, entries: list[Entry], several: bool) -> list[AuditLine]:
     excluded = catalog.excluded_from(program.id)
     courses = [e for e in entries if e.course_id]
     lines: dict[str, AuditLine] = {}
@@ -120,7 +139,7 @@ def _program_lines(catalog: Catalog, student: StudentProfile, entries: list[Entr
 
     for need in needs:
         it = need.item
-        section = "Major: " + need.label.split(":")[0] if program.type == "major" else "Minor"
+        section = _section(program, need, several)
         label = need.label.split(": ", 1)[-1]
         if it.kind in ("course", "choose"):
             options = [o for o in it.options if not (o in excluded and excluded[o] is None)]
@@ -141,16 +160,18 @@ def _program_lines(catalog: Catalog, student: StudentProfile, entries: list[Entr
     taken: set[str] = set()
     for need in sorted((n for n in needs if n.item.kind == "hours"), key=lambda n: -(n.item.min_level or 0)):
         it = need.item
-        section = "Major: " + need.label.split(":")[0] if program.type == "major" else "Minor"
+        section = _section(program, need, several)
         pool = [e for e in _first(courses) if e.course_id not in taken
                 and fits_hours_rule(catalog.courses[e.course_id], need, program.id, catalog)]
+        pool += [e for e in entries if e.counts_for == need.key]          # planned abroad courses
         used, total = [], 0.0
         for e in pool:
             if total >= (it.hours or 0):
                 break
             used.append(e)
-            total += countable_hours(catalog.courses[e.course_id], program.id, catalog)
-            taken.add(e.course_id)
+            total += countable_hours(catalog.courses[e.course_id], program.id, catalog) if e.course_id else e.hours
+            if e.course_id:
+                taken.add(e.course_id)
         label = need.label.split(": ", 1)[-1]
         if total >= (it.hours or 0):
             lines[need.key] = AuditLine(section, label, _status(used), ", ".join(e.label for e in used), used)
@@ -171,6 +192,8 @@ def _core_lines(catalog: Catalog, student: StudentProfile, entries: list[Entry],
     used_21cs: set[int] = set()            # ids of entries already used for a 21CS category
 
     def qualifies(e: Entry, need: CoreNeed) -> bool:
+        if e.counts_for == need.id and e.source == "affiliate":   # non-Wake abroad: transfer credit, no 21CS
+            return need.kind != "21cs"
         if e.counts_for == need.id:                         # outside course or slot entered for this category
             return not (e.source != "wfu" and need.kind in ("division", "21cs"))
         if e.course_id:
@@ -257,4 +280,4 @@ def run_audit(catalog: Catalog, student: StudentProfile, plan: Plan | None = Non
     limit = rule_or(catalog, "max_outside_hours", 30)
     if outside > limit:
         notes.append(f"{outside:g} AP/transfer hours listed; at most {limit:g} count toward graduation.")
-    return Audit(student.name, student.program, lines, hours, notes)
+    return Audit(student.name, " + ".join(student.programs), lines, hours, notes)

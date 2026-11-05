@@ -27,7 +27,10 @@ import yaml
 from sklearn.feature_extraction.text import ENGLISH_STOP_WORDS, TfidfVectorizer
 
 from gradplanner.models import Catalog, Course
-from gradplanner.planner.requirements import fits_hours_rule, program_needs, schedulable_reason
+from gradplanner.planner.requirements import (
+    admission_courses, business_reason, fits_hours_rule, is_business_student, load_settings, program_needs,
+    schedulable_reason,
+)
 from gradplanner.planner.student import StudentProfile
 
 CAREERS_FILE = Path(__file__).with_name("careers.yaml")
@@ -140,28 +143,35 @@ class Recommender:
             best = best[:157].rsplit(" ", 1)[0] + "..."
         return matched, best
 
-    def recommend(self, query: str, program_id: str, exclude: set[str] = frozenset(), top_n: int = 5,
-                  goal_label: str | None = None) -> list[Recommendation]:
-        """Top courses for `query` that the student could still take toward `program_id`."""
-        program = self.catalog.programs[program_id]
-        excluded = self.catalog.excluded_from(program_id)
-        required = {o for n in program_needs(program) if n.item.kind in ("course", "choose") for o in n.item.options}
-        hours_needs = [n for n in program_needs(program) if n.item.kind == "hours"]
+    def recommend(self, query: str, program_id: str | list[str], exclude: set[str] = frozenset(), top_n: int = 5,
+                  goal_label: str | None = None, skip=None) -> list[Recommendation]:
+        """Top courses for `query` that the student could still take toward their program(s).
+
+        `program_id` is one id or a list (major(s) and minors; the first is the main one).
+        `skip(course)` can return a reason to leave a course out (e.g. School of Business rules)."""
+        ids = [program_id] if isinstance(program_id, str) else list(program_id)
+        needs = [n for pid in ids for n in program_needs(self.catalog.programs[pid])]
+        excluded = self.catalog.excluded_from(ids[0])
+        required = {o for n in needs if n.item.kind in ("course", "choose") for o in n.item.options}
+        hours_needs = [n for n in needs if n.item.kind == "hours"]
+        several = len(ids) > 1
         q = self.vectorizer.transform([query])
         ranked = sorted(self.scores(query).items(), key=lambda kv: (-kv[1], kv[0]))
         out: list[Recommendation] = []
         for cid, score in ranked:
             course = self.catalog.courses[cid]
             if (score <= 0 or cid in exclude or cid in required or schedulable_reason(course)
-                    or (cid in excluded and excluded[cid] is None) or course.credits <= 0):
+                    or (cid in excluded and excluded[cid] is None) or course.credits <= 0
+                    or (skip and skip(course))):
                 continue
             if any(r.course_id in course.exclusive_with or r.title == course.title for r in out):
                 continue          # same course under another subject (credit not allowed for both)
             if course.number.endswith("L") and f"{course.subject} {course.number[:-1]}" in self.catalog.courses:
                 continue          # a lab: recommend the lecture (the lab comes with it as a corequisite)
             matched, quote = self._explain(cid, q)
-            toward = [n.label.split(": ", 1)[-1] for n in hours_needs
-                      if fits_hours_rule(course, n, program_id, self.catalog)]
+            toward = [(f"{self.catalog.programs[n.program_id].name}: " if several else "")
+                      + n.label.split(": ", 1)[-1] for n in hours_needs
+                      if fits_hours_rule(course, n, n.program_id, self.catalog)]
             goal = f" ({goal_label})" if goal_label else ""
             reason = f"Matches your goal{goal} through {', '.join(matched)}: “{quote}”"
             out.append(Recommendation(cid, course.title, score, matched, quote, toward, reason))
@@ -193,4 +203,16 @@ def recommend_for_student(catalog: Catalog, student: StudentProfile, top_n: int 
         return [], {}
     rec = recommender or Recommender(catalog)
     done = student.completed_ids
-    return rec.recommend(query, student.program, done, top_n, label), rec.scores(query)
+    return rec.recommend(query, student.programs, done, top_n, label, skip=business_skip(catalog, student)), \
+        rec.scores(query)
+
+
+def business_skip(catalog: Catalog, student: StudentProfile):
+    """For non-business students: leave out School of Business courses they'd need permission for.
+    (Business majors can take them after admission, so they stay in.)"""
+    settings = load_settings(catalog)
+    if is_business_student(catalog, student, settings):
+        return None
+    last = student.plan_terms()[-1] if student.plan_terms() else student.graduation_term
+    admission = admission_courses(catalog)
+    return lambda course: business_reason(course, last, student, catalog, settings, admission)

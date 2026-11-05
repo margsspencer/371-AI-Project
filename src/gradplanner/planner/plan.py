@@ -12,7 +12,7 @@ class PlanItem:
     id: str                 # "CSC 201", "DIV-I", or "ELECTIVE"
     title: str
     hours: float
-    kind: str               # course | core_slot | elective_slot
+    kind: str               # course | core_slot | elective_slot | abroad
     counts_toward: list[str] = field(default_factory=list)   # requirement keys (see Plan.labels)
 
 
@@ -20,6 +20,7 @@ class PlanItem:
 class TermPlan:
     term: Term
     items: list[PlanItem] = field(default_factory=list)
+    abroad: str = ""        # study-abroad semester: location or program type ("" = on campus)
 
     @property
     def hours(self) -> float:

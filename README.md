@@ -55,11 +55,42 @@ and self-designed majors are out of scope.
 
 `scripts/validate_data.py` writes only the report, without rebuilding the database.
 
+## Web app
+
+```bash
+streamlit run src/gradplanner/ui/app.py
+```
+
+Opens in the browser. Fill in a fictional student in the sidebar (or load one of the
+samples), press **Make my plan**, and see the semester plan, career picks, and degree
+audit in tabs. Programs whose requirements were only partly read show a banner, and the
+rows that need an advisor appear as "advisor review" in the audit.
+
+Students can pick up to two majors and two minors. A course may count toward each
+program it fits (several departments say so; the Bulletin sets no general limit).
+Major pairs the Bulletin forbids, such as Biology with Neuroscience, are refused
+(list in `data/overrides/team_decisions.yaml`). School of Business courses are
+planned from sophomore spring on for business majors (after admission), except
+the admission prerequisites; non-business students only get them when one of
+their programs requires them, since others need instructor permission.
+
+**Study abroad.** Tick "I plan to study abroad" and pick one or two semesters (junior
+spring by default) and the program type. An abroad semester holds "abroad course"
+slots instead of catalog courses: divisionals, the language requirement, 21st-century
+core (Wake Forest programs only), and major/minor elective credit within each
+program's limit. Limits: business majors 6 hours; Sociology 6; Entrepreneurship
+minor 6; Spanish 3 from affiliate programs; other College programs 6 (a team
+assumption: the Bulletin states no limit). Affiliate (non-Wake Forest) programs are
+transfer credit: they count toward the 30-hour outside-credit limit and can't be in
+the senior year. All of this is in `data/overrides/team_decisions.yaml`.
+
 ## Make a plan
 
 ```bash
 python scripts/plan.py samples/sam_first_year_bs.yaml     # first-year B.S. student, 8 semesters
 python scripts/plan.py samples/jordan_junior_bs.yaml      # rising junior with AP + core credit
+python scripts/plan.py samples/riley_first_year_finance.yaml   # Finance major + Economics minor
+python scripts/plan.py samples/casey_double_major.yaml    # CS + Math double major, Stats minor, London
 ```
 
 Prints each semester (courses, core "choose a course" slots, free electives,

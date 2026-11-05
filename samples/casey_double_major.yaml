@@ -1,0 +1,24 @@
+# FICTIONAL student. Sophomore with a double major in Computer Science and
+# Mathematics plus a Statistics minor, spending junior spring in London.
+name: Casey Example (fictional)
+majors: [CSC-BS, MTH-BA]
+minors: [STA-MINOR]
+entry_term: Fall 2025
+next_term: Fall 2026
+graduation_term: Spring 2029
+max_hours_per_term: 17
+language_courses_needed: 0
+completed:
+  - {course: CSC 111}
+  - {course: MTH 111}
+  - {course: MTH 112}
+outside_courses:
+  - {name: FYS 100, hours: 3, counts_for: BASIC-FYS}
+  - {name: WRI 111, hours: 4, counts_for: BASIC-WRI}
+  - {name: SPA 212, hours: 3, counts_for: BASIC-LANG}
+  - {name: HST 101, hours: 3, counts_for: DIV-I}
+  - {name: Elective credits, hours: 6}
+interests: []
+career: data-scientist
+abroad:
+  - {term: Spring 2028, program: wfu, location: "Worrell House, London"}

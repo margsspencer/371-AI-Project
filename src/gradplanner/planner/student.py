@@ -4,7 +4,7 @@ Profiles are local YAML files with FAKE data only (see samples/). They never
 go into the database. Example:
 
     name: Sam Example (fictional)
-    program: CSC-BS
+    program: CSC-BS                # or, for several:  majors: [CSC-BS, MTH-BA]  minors: [STA-MINOR]
     entry_term: Fall 2026          # first semester at Wake Forest
     next_term: Fall 2026           # first semester to plan
     graduation_term: Spring 2030   # last semester (hard deadline)
@@ -17,6 +17,8 @@ go into the database. Example:
     interests: [CSC 374]           # electives the student definitely wants
     career: machine-learning-engineer   # pick-list id from recommender/careers.yaml (optional)
     career_text: "AI for healthcare"     # the student's own words (optional)
+    abroad:                        # study-abroad semesters (optional)
+      - {term: Spring 2029, program: wfu, location: "Worrell House, London"}   # wfu | affiliate
 """
 
 from __future__ import annotations
@@ -45,6 +47,19 @@ class OutsideCourse:
 
 
 @dataclass
+class AbroadTerm:
+    """A semester abroad. 'wfu' = a Wake Forest program (Wake Forest credit);
+    'affiliate' = an approved non-Wake Forest program (transfer credit)."""
+    term: Term
+    program: str = "wfu"
+    location: str = ""
+
+    def __post_init__(self) -> None:
+        if self.program not in ("wfu", "affiliate"):
+            raise ValueError(f"study abroad program must be 'wfu' or 'affiliate', got {self.program!r}")
+
+
+@dataclass
 class StudentProfile:
     name: str
     program: str
@@ -61,6 +76,16 @@ class StudentProfile:
     interests: list[str] = field(default_factory=list)
     career: str | None = None
     career_text: str = ""
+    other_programs: list[str] = field(default_factory=list)   # second major and/or minors
+    abroad: list[AbroadTerm] = field(default_factory=list)
+
+    def abroad_in(self, term: Term) -> AbroadTerm | None:
+        return next((a for a in self.abroad if a.term == term), None)
+
+    @property
+    def programs(self) -> list[str]:
+        """Every major and minor, the main one first."""
+        return [self.program] + [p for p in self.other_programs if p != self.program]
 
     def plan_terms(self) -> list[Term]:
         return terms_between(self.next_term, self.graduation_term, self.include_summer)
@@ -87,9 +112,13 @@ class StudentProfile:
 
 
 def profile_from_dict(d: dict) -> StudentProfile:
+    programs = list(d.get("majors") or ([d["program"]] if d.get("program") else [])) + list(d.get("minors") or [])
+    if not programs:
+        raise ValueError("a profile needs 'program' (or 'majors' / 'minors')")
     p = StudentProfile(
         name=d["name"],
-        program=d["program"],
+        program=programs[0],
+        other_programs=programs[1:],
         entry_term=Term.parse(d["entry_term"]),
         next_term=Term.parse(d["next_term"]),
         graduation_term=Term.parse(d["graduation_term"]),
@@ -103,6 +132,8 @@ def profile_from_dict(d: dict) -> StudentProfile:
         interests=list(d.get("interests", [])),
         career=d.get("career"),
         career_text=d.get("career_text", ""),
+        abroad=[AbroadTerm(Term.parse(a["term"]), a.get("program", "wfu"), a.get("location", ""))
+                for a in d.get("abroad") or []],
     )
     if p.graduation_term < p.next_term:
         raise ValueError("graduation_term is before next_term")

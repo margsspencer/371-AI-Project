@@ -13,7 +13,7 @@ from __future__ import annotations
 import math
 
 from gradplanner.models import Catalog, CourseAtom, LevelAtom
-from gradplanner.planner.requirements import PlannerSettings, program_needs, rule_or, schedulable_reason
+from gradplanner.planner.requirements import PlannerSettings, rule_or, schedulable_reason, student_needs
 from gradplanner.planner.student import StudentProfile
 from gradplanner.planner.terms import Term
 
@@ -61,11 +61,10 @@ def unplannable_needs(catalog: Catalog, student: StudentProfile) -> dict[str, st
     """{requirement key: reason} for course/choose requirements the planner can't fill on its own
     (every option needs permission, a human-checked prerequisite, or isn't in our data)."""
     done = {c for c in student.completed_ids if c in catalog.courses}
-    program = catalog.programs[student.program]
-    excluded = catalog.excluded_from(program.id)
     memo: dict = {}
     out = {}
-    for need in program_needs(program):
+    for need in student_needs(catalog, student):
+        excluded = catalog.excluded_from(need.program_id)
         it = need.item
         if it.kind not in ("course", "choose") and not (it.kind == "hours" and it.options):
             continue
@@ -96,15 +95,14 @@ def precheck(catalog: Catalog, student: StudentProfile, settings: PlannerSetting
     blocking: list[str] = []
     notes: list[str] = []
     done = {c for c in student.completed_ids if c in catalog.courses}
-    program = catalog.programs[student.program]
-    excluded = catalog.excluded_from(program.id)
     memo: dict = {}
 
     if not terms:
         return ["There are no semesters between next_term and graduation_term."], notes
     notes += list(unplannable_needs(catalog, student).values())
 
-    for need in program_needs(program):
+    for need in student_needs(catalog, student):
+        excluded = catalog.excluded_from(need.program_id)
         it = need.item
         if it.kind not in ("course", "choose"):
             continue

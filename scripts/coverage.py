@@ -6,7 +6,7 @@ passes, and how long it took. Writes data/coverage_report.md.
 
 Usage:
     python scripts/coverage.py                 # all programs (about 20 minutes)
-    python scripts/coverage.py CSC-BS BIO-BS   # just these
+    python scripts/coverage.py CSC-BS BIO-BS   # just these (prints only; the report keeps the full run)
 """
 
 import sys
@@ -55,6 +55,9 @@ def main() -> None:
              "| Program | Name | School | Read | Plan | Time | Note |", "|---|---|---|---|---|---|---|"]
     for pid, name, school, sup, res, secs, why in rows:
         lines.append(f"| {pid} | {name} | {school} | {sup} | {res} | {secs:.0f}s | {why[:120].replace('|', '/')} |")
+    if sys.argv[1:]:                    # a partial run doesn't replace the full report
+        print(f"\n{dict(support)}  {dict(results)}")
+        return
     REPORT.write_text("\n".join(lines) + "\n")
     print(f"\n{dict(support)}  {dict(results)}  -> {REPORT}")
 

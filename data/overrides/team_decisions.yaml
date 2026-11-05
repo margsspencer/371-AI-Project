@@ -58,3 +58,45 @@ subject_aliases:
   chemistry: CHM
   psychology: PSY
   statistics: STA
+
+business_school:
+  # Students are admitted to the School of Business in the spring of sophomore
+  # year. Business majors can't take School of Business courses before then,
+  # except the "Prerequisites for Admission" listed on each business major page
+  # (ACC 111, BEM 201, ...). Non-business students need instructor permission
+  # (Bulletin, Advising and Registration page), so the planner doesn't pick
+  # these courses for them unless one of their programs requires them.
+  subjects: [ACC, BEM, BUS, FIN]
+  admitted_term: {year: 2, season: spring}     # sophomore spring
+  extra_programs: [STA-BS-DECISION]            # joint major that also needs business-school admission
+  source: "team decision 2026-11-05 (advisor knowledge; the Bulletin's admission page isn't scraped)"
+
+not_double_majors:
+  # Major pairs the Bulletin says can't be combined. Copied by hand from the
+  # department pages' "Policies for the Majors and Minors" (2026-27).
+  - {a: [BIO-BA, BIO-BS], b: [BMB-BS, ENV-BA, NEU-BA, NEU-BS], source: "Biology department page"}
+  - {a: [ENV-BA], b: [BMB-BS, CHM-BS-BIOCHEMISTRY], source: "Environmental Program page"}
+  - {a: [NEU-BA, NEU-BS], b: [PSY-BA], source: "Neuroscience department page"}
+  - {a: [BMB-BS], b: [CHM-BA, CHM-BS, CHM-BS-BIOCHEMISTRY, CHM-BS-MATERIALS, CHM-BS-MEDICINAL], source: "Biochemistry and Molecular Biology page"}
+  - {a: [STA-BS-DECISION, STA-BA, STA-BS, STA-BS-APPLIED], b: [STA-BS-DECISION, STA-BA, STA-BS, STA-BS-APPLIED], source: "Statistical Sciences department page"}
+
+study_abroad:
+  # A study-abroad semester is planned with "abroad course" slots instead of
+  # catalog courses. Bulletin rules used (2026-27):
+  #   - affiliate (non-Wake Forest) programs are transfer credit: at most 30 hours
+  #     from outside Wake Forest count toward graduation, and no 21CS requirement
+  #     may be met with transfer credit (Requirements for Degrees)
+  #   - the senior year must be in Wake Forest programs (Requirements for Degrees)
+  #   - department limits below, copied from the department pages
+  min_hours: 12                 # ASSUMPTION (team 2026-11-05): a full-time abroad semester
+  default_program_hours: 6      # ASSUMPTION (team 2026-11-05): College programs that state no limit
+  business_program_hours: 6     # team decision 2026-11-05: business majors may count 6 hours from abroad
+  subject_hours:                # limits stated on department pages
+    SOC: {hours: 6, source: "Sociology: study abroad and transfer credit limited to two courses (6h)"}
+    ENT: {hours: 6, source: "Entrepreneurship minor: no more than six hours can be taken abroad"}
+    SPA: {hours: 3, affiliate_only: true, source: "Spanish: no more than 3 hours from non-Wake Forest programs"}
+  categories: [BASIC-LANG, DIV-I, DIV-II, DIV-III, DIV-IV, DIV-V, 21CS-POR, 21CS-SWC, 21CS-EI, 21CS-QDA]
+  notes:
+    - "Abroad courses must be approved by the department before you go to count toward a major or minor."
+    - "History courses from abroad count for a divisional only if designated (D); Sociology courses from abroad never do."
+  source: "team decision 2026-11-05"

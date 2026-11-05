@@ -8,7 +8,9 @@ validate_plan.py checks again, independently).
 
 Variables
   take[c, t]   1 if course c is placed in term t (only created when c is offered in t)
-  slot[k, t]   number of generic core slots of category k in term t ("Division I: choose a course")
+  slot[k, t]   number of generic core slots of category k in term t ("Division I: choose a course");
+               in a study-abroad term, a course taken abroad that counts for k
+  abr[n, t]    number of 3-hour abroad courses counting toward elective-hours rule n in abroad term t
   elec[t]      number of 3-hour free-elective slots in term t
   hrs[c, n]    1 if course c's hours count toward elective-hours rule n ("12 h of CSC 300+")
   cov[c, k]    1 if course c counts toward core category k
@@ -17,11 +19,18 @@ Rules (each group has an on/off switch, used to explain "no valid plan")
   course rules   each course at most once; prerequisites in an earlier term; corequisites
                  in the same or earlier term; class standing; "credit not allowed for both"
   term limits    hours per term <= the student's maximum (never above the Bulletin's 17)
-  major          every required course; every "choose" list; every elective-hours rule
-                 (one switch per requirement, so an explanation can name it)
+  major/minor    every required course; every "choose" list; every elective-hours rule, for
+                 each of the student's majors and minors (one switch per requirement, so an
+                 explanation can name it)
+  business       School of Business courses: business majors not before admission
+                 (sophomore spring) except admission prerequisites; other students only
+                 when one of their programs requires the course
   core           every core category is covered by a course or a slot; timing (FYS/WRI in
                  year 1, HES by the end of year 2); one language course per term
   total hours    at least 120 hours by graduation
+  study abroad   no catalog courses in an abroad term; a full-time load there; abroad credit
+                 toward each major/minor within its limit (business 6 h; Sociology 6 h; ...);
+                 affiliate (non-Wake) programs: transfer-credit limit of 30 h, no 21CS
 
 Objective, most important first
   1. no more hours than needed       2. loads close to the normal 15 h
@@ -30,8 +39,11 @@ Objective, most important first
      that match their career goal (relevance scores 0-100 from the recommender)
   5. required courses and core slots as early as possible
 
-Assumption: a course may count toward the major, one division, one 21CS
-category, and QR at the same time.
+Assumptions: a course may count toward the major, one division, one 21CS
+category, and QR at the same time. With two majors (or a major and minors), a
+course may count toward each program; several departments say so explicitly,
+and the Bulletin has no general limit. Pairs the Bulletin forbids (e.g. Biology
+with Neuroscience) are refused before planning.
 """
 
 from __future__ import annotations
@@ -44,8 +56,10 @@ from gradplanner.models import Catalog, Course, CourseAtom, LevelAtom
 from gradplanner.planner.plan import Plan, PlanItem, TermPlan
 from gradplanner.planner.precheck import precheck, unplannable_needs
 from gradplanner.planner.requirements import (
-    PlannerSettings, core_needs, countable_hours, course_counts_for_core,
-    fits_hours_rule, load_settings, program_needs, rule_or, schedulable_reason,
+    ABROAD_COURSE_HOURS, PlannerSettings, abroad_category_ok, abroad_problems, abroad_program_cap,
+    admission_courses, business_reason, core_needs, countable_hours,
+    course_counts_for_core, fits_hours_rule, is_business_student, load_settings, needed_courses, program_needs,
+    program_problems, rule_or, schedulable_reason, student_needs,
 )
 from gradplanner.planner.student import StudentProfile
 from gradplanner.planner.terms import Term
@@ -60,6 +74,7 @@ SWITCHES = {
     "term_limits": "the maximum hours per semester",
     "core": "the Core Curriculum requirements and their timing",
     "total": "the 120-hour graduation total",
+    "abroad": "the study abroad plan (full-time load and limits on abroad credit)",
 }
 
 
@@ -120,10 +135,14 @@ def plan_for_student(catalog: Catalog, student: StudentProfile, settings: Planne
     prefer career-relevant courses when it picks electives.
     """
     settings = settings or load_settings(catalog)
-    if student.program not in catalog.programs:
-        raise ValueError(f"unknown program {student.program!r}; known: {sorted(catalog.programs)}")
+    unknown = [p for p in student.programs if p not in catalog.programs]
+    if unknown:
+        raise ValueError(f"unknown program(s) {unknown}; known: {sorted(catalog.programs)}")
     ctx = _Ctx(catalog, student, settings, student.plan_terms())
-    plan = Plan(student.name, student.program, "unknown")
+    plan = Plan(student.name, " + ".join(student.programs), "unknown")
+    if problems := program_problems(catalog, student, settings) + abroad_problems(student):
+        plan.status, plan.explanations = "infeasible", problems
+        return plan
 
     blocking, notes = precheck(catalog, student, settings, ctx.terms)
     plan.notes += notes
@@ -132,6 +151,14 @@ def plan_for_student(catalog: Catalog, student: StudentProfile, settings: Planne
         plan.explanations = blocking
         return plan
 
+    if student.abroad:
+        plan.notes += settings.abroad.notes
+        if any(a.program == "affiliate" for a in student.abroad):
+            plan.notes.append("Credit from an affiliate (non-Wake Forest) program is transfer credit: it isn't in "
+                              "your GPA and counts toward the 30-hour limit on outside credit.")
+    if is_business_student(catalog, student, settings):
+        plan.notes.append("School of Business courses are planned from sophomore spring on (after admission to "
+                          "the School of Business); only the admission prerequisites come earlier.")
     builder = _Builder(ctx, plan, relevance or {})
     builder.build()
     builder.solve(time_limit, workers)
@@ -142,7 +169,7 @@ class _Builder:
     def __init__(self, ctx: _Ctx, plan: Plan, relevance: dict[str, int]) -> None:
         self.ctx, self.plan, self.relevance = ctx, plan, relevance
         self.cat, self.st, self.terms = ctx.catalog, ctx.student, ctx.terms
-        self.program = self.cat.programs[self.st.program]
+        self.programs = [self.cat.programs[p] for p in self.st.programs]
         self.m = cp_model.CpModel()
         self.sw = {name: self.m.new_bool_var(f"switch_{name}") for name in SWITCHES}
         self.need_sw: dict[str, cp_model.IntVar] = {}       # one switch per major/minor requirement
@@ -159,8 +186,10 @@ class _Builder:
         self.done_hours = (sum(self.cat.courses[c].credits for c in self.done)
                            + sum(o.hours for o in self.st.outside_courses))
 
+        self.admission = admission_courses(self.cat)
         self.candidates: dict[str, Course] = {}
-        for cid in relevant_courses(self.cat, self.program, self.st, relevance):
+        seeds = set().union(*(relevant_courses(self.cat, p, self.st, relevance) for p in self.programs))
+        for cid in seeds:
             course = self.cat.courses[cid]
             if cid not in self.done and schedulable_reason(course) is None:
                 self.candidates[cid] = course
@@ -172,8 +201,12 @@ class _Builder:
         self.load: dict[int, cp_model.IntVar] = {}
         self.hrs: dict[tuple[str, str], cp_model.IntVar] = {}
         self.cov: dict[tuple[str, str], cp_model.IntVar] = {}
-        self.pneeds = program_needs(self.program)
+        self.pneeds = student_needs(self.cat, self.st)
+        self.required = needed_courses(self.cat, self.st)
         self.cneeds = [n for n in core_needs(self.cat, self.st, ctx.settings) if n.count > 0]
+        self.abroad = {ti: a for ti, t in enumerate(self.terms) if (a := self.st.abroad_in(t))}
+        self.skipped = unplannable_needs(self.cat, self.st)
+        self.abr: dict[tuple[str, int], cp_model.IntVar] = {}
         self.objective_terms: list = []
 
     # ------------------------------------------------------------------ build
@@ -190,7 +223,9 @@ class _Builder:
     def _course_vars(self) -> None:
         for cid, course in self.candidates.items():
             per_term = {ti: self.m.new_bool_var(f"take[{cid},{t}]")
-                        for ti, t in enumerate(self.terms) if course.is_offered(t.season, t.year)}
+                        for ti, t in enumerate(self.terms) if course.is_offered(t.season, t.year)
+                        and ti not in self.abroad
+                        and business_reason(course, t, self.st, self.cat, self.ctx.settings, self.admission) is None}
             if not per_term:
                 continue
             self.take[cid] = per_term
@@ -211,17 +246,35 @@ class _Builder:
             for ti, term in enumerate(self.terms):
                 if last_year is not None and self.st.year_index(term) > last_year:
                     continue
+                if ti in self.abroad and not abroad_category_ok(need.category, self.ctx.settings,
+                                                                self.abroad[ti].program == "affiliate"):
+                    continue
                 self.slot[need.id][ti] = self.m.new_int_var(0, 1 if need.one_per_term else need.count,
                                                             f"slot[{need.id},{term}]")
+        for need in self.pneeds:
+            if need.item.kind == "hours" and need.key not in self.skipped:
+                for ti in self.abroad:
+                    self.abr[(need.key, ti)] = self.m.new_int_var(0, 5, f"abr[{need.key},{self.terms[ti]}]")
         bulletin_max = rule_or(self.cat, "max_hours_per_semester", 17)
         for ti, term in enumerate(self.terms):
             expr = h(ELECTIVE_HOURS) * self.elec[ti]
+            expr += sum(h(ABROAD_COURSE_HOURS) * v for (_, tj), v in self.abr.items() if tj == ti)
             expr += sum(h(self.candidates[c].credits) * v[ti] for c, v in self.take.items() if ti in v)
             expr += sum(h(n.slot_hours) * self.slot[n.id][ti] for n in self.cneeds if ti in self.slot[n.id])
             self.load[ti] = self.m.new_int_var(0, h(40), f"load[{term}]")
             self.m.add(self.load[ti] == expr)
             self.m.add(self.load[ti] <= h(self.st.max_hours(term, bulletin_max))).only_enforce_if(
                 self.sw["term_limits"])
+            if ti in self.abroad:
+                self.m.add(self.load[ti] >= h(self.ctx.settings.abroad.min_hours)).only_enforce_if(self.sw["abroad"])
+        # Transfer-credit limit: AP/transfer already earned + affiliate abroad hours.
+        affiliate = [self.load[ti] for ti, a in self.abroad.items() if a.program == "affiliate"]
+        if affiliate:
+            earned = (sum(self.cat.courses[c.course].credits for c in self.st.finished
+                          if c.source != "wfu" and c.course in self.cat.courses)
+                      + sum(o.hours for o in self.st.outside_courses if o.source != "wfu"))
+            limit = rule_or(self.cat, "max_outside_hours", 30)
+            self.m.add(h(earned) + sum(affiliate) <= h(limit)).only_enforce_if(self.sw["abroad"])
 
     def _earlier(self, atom, ti: int, inclusive: bool) -> tuple[bool, list]:
         """(already met by a completed course?, take-variables that would meet it before term ti)."""
@@ -286,40 +339,56 @@ class _Builder:
             self.need_sw[key] = self.m.new_bool_var(f"switch_{key}")
         return self.need_sw[key]
 
+    def _label(self, need) -> str:
+        if len(self.programs) == 1:
+            return need.label
+        return f"{self.cat.programs[need.program_id].name} – {need.label}"
+
     def _major(self) -> None:
-        excluded = self.cat.excluded_from(self.program.id)
         hours_needs = [n for n in self.pneeds if n.item.kind == "hours"]
-        skipped = unplannable_needs(self.cat, self.st)      # left for the advisor (noted by precheck)
+        skipped = self.skipped                               # left for the advisor (noted by precheck)
         for need in self.pneeds:
             it = need.item
-            self.plan.labels[need.key] = need.label
+            excluded = self.cat.excluded_from(need.program_id)
+            self.plan.labels[need.key] = self._label(need)
             if need.key in skipped:
                 continue
             if it.kind in ("course", "choose"):
                 options = [o for o in it.options if not (o in excluded and excluded[o] is None)]
                 self.m.add(sum(self._have(o) for o in options) >= it.n).only_enforce_if(self._need_switch(need.key))
                 if it.free_text_options:
-                    self.plan.notes.append(f"{need.label}: the plan uses a listed course; other options "
+                    self.plan.notes.append(f"{self._label(need)}: the plan uses a listed course; other options "
                                            f"need advisor approval ({'; '.join(it.free_text_options)}).")
             elif it.kind == "free_text":
-                self.plan.notes.append(f"{need.label}: can't be planned automatically; check with your advisor.")
+                self.plan.notes.append(f"{self._label(need)}: can't be planned automatically; check with your advisor.")
             elif it.kind == "note":
-                self.plan.notes.append(f"Program note: {need.label}"
+                self.plan.notes.append(f"Program note: {self._label(need)}"
                                        + (f" ({it.needs_review})" if it.needs_review else ""))
-        # Elective-hours rules: each course's hours count toward at most one rule.
+        # Elective-hours rules: within one program, a course's hours count toward at most one rule.
         for need in hours_needs:
             if need.key in skipped:
                 continue
             terms = []
             for cid in list(self.done) + list(self.take):
                 course = self.cat.courses[cid]
-                if fits_hours_rule(course, need, self.program.id, self.cat):
+                if fits_hours_rule(course, need, need.program_id, self.cat):
                     v = self.m.new_bool_var(f"hrs[{cid},{need.key}]")
                     self.hrs[(cid, need.key)] = v
-                    terms.append(h(countable_hours(course, self.program.id, self.cat)) * v)
+                    terms.append(h(countable_hours(course, need.program_id, self.cat)) * v)
+            terms += [h(ABROAD_COURSE_HOURS) * v for (k, _), v in self.abr.items() if k == need.key]
             self.m.add(sum(terms) >= h(need.item.hours or 0)).only_enforce_if(self._need_switch(need.key))
-        for cid in set(c for c, _ in self.hrs):
-            used = [v for (c, _), v in self.hrs.items() if c == cid]
+        # Limits on abroad credit toward each program (all abroad terms; affiliate terms alone).
+        for prog in self.programs:
+            mine = [(ti, v) for (k, ti), v in self.abr.items() if k.startswith(prog.id + ":")]
+            if not mine:
+                continue
+            for affiliate_only in (False, True):
+                cap = abroad_program_cap(self.cat, prog.id, self.ctx.settings, affiliate_only)
+                vs = [v for ti, v in mine if not affiliate_only or self.abroad[ti].program == "affiliate"]
+                if vs:
+                    self.m.add(h(ABROAD_COURSE_HOURS) * sum(vs) <= h(cap)).only_enforce_if(self.sw["abroad"])
+        for cid, pid in {(c, k.split(":", 1)[0]) for c, k in self.hrs}:
+            used = [v for (c, k), v in self.hrs.items() if c == cid and k.startswith(pid + ":")]
             self.m.add(sum(used) <= self._have(cid))
 
     def _core(self) -> None:
@@ -362,9 +431,13 @@ class _Builder:
             self.m.add(dev >= self.load[ti] - target)
             self.m.add(dev >= target - self.load[ti])
             obj.append(10 * dev)
-        obj.append(500 * sum(v for per in self.slot.values() for v in per.values()))   # 3. fewer core slots
+        obj.append(500 * sum(v for per in self.slot.values() for ti, v in per.items()   # 3. fewer core slots
+                             if ti not in self.abroad))
+        # Abroad: divisionals and major/minor credit are what students go for; plain electives last.
+        obj.append(-100 * sum(self.abr.values()))
+        obj.append(200 * sum(self.elec[ti] for ti in self.abroad))
         obj.append(sum(5 * ti * v for per in self.slot.values() for ti, v in per.items()))  # 5. core early
-        required = {o for n in self.pneeds if n.item.kind in ("course", "choose") for o in n.item.options}
+        required = self.required
         interests = set(self.st.interests)
         for cid, per_term in self.take.items():
             if cid in interests:
@@ -393,8 +466,9 @@ class _Builder:
             self.plan.explanations = self._explain(time_limit)
         else:
             self.plan.status = "unknown"
-            self.plan.explanations = [f"The solver found no plan within {time_limit:g} seconds. "
-                                      "Try a later graduation term or a higher hour limit."]
+            several = " This combination of programs may need more semesters." if len(self.programs) > 1 else ""
+            self.plan.explanations = [f"The solver found no plan within {time_limit:g} seconds.{several} "
+                                      "Try a later graduation term, a higher hour limit, or summer terms."]
 
     def _all_switches(self) -> list:
         return list(self.sw.values()) + list(self.need_sw.values())
@@ -431,8 +505,8 @@ class _Builder:
 
     def _counts(self, cid: str, solver: cp_model.CpSolver) -> list[str]:
         keys = []
-        excluded = self.cat.excluded_from(self.program.id)
         for need in self.pneeds:
+            excluded = self.cat.excluded_from(need.program_id)
             if need.item.kind in ("course", "choose") and cid in need.item.options \
                     and not (cid in excluded and excluded[cid] is None):
                 keys.append(need.key)
@@ -440,10 +514,30 @@ class _Builder:
         keys += [k for (c, k), v in self.cov.items() if c == cid and solver.value(v)]
         return keys
 
+    def _abroad_term(self, ti: int, term: Term, solver: cp_model.CpSolver) -> TermPlan:
+        a = self.abroad[ti]
+        tp = TermPlan(term, abroad=a.location or ("Wake Forest program" if a.program == "wfu" else "affiliate program"))
+        for need in self.cneeds:
+            var = self.slot[need.id].get(ti)
+            for _ in range(solver.value(var) if var is not None else 0):
+                tp.items.append(PlanItem("ABROAD", f"Abroad course: {need.category.name}", need.slot_hours,
+                                         "abroad", [need.id]))
+        for (key, tj), var in self.abr.items():
+            if tj == ti:
+                for _ in range(solver.value(var)):
+                    tp.items.append(PlanItem("ABROAD", f"Abroad course toward {self.plan.labels.get(key, key)}",
+                                             ABROAD_COURSE_HOURS, "abroad", [key]))
+        for _ in range(solver.value(self.elec[ti])):
+            tp.items.append(PlanItem("ABROAD", "Abroad course: elective", ELECTIVE_HOURS, "abroad"))
+        return tp
+
     def _extract(self, solver: cp_model.CpSolver) -> None:
         defaults_used = []
         for ti, term in enumerate(self.terms):
             tp = TermPlan(term)
+            if ti in self.abroad:
+                self.plan.terms.append(self._abroad_term(ti, term, solver))
+                continue
             for cid, per_term in self.take.items():
                 if ti in per_term and solver.value(per_term[ti]):
                     course = self.candidates[cid]

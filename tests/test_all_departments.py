@@ -182,3 +182,8 @@ def test_real_catalog_ids_and_coverage():
     assert {"ACC-BS", "FIN-BS", "BEM-BS"} <= set(cat.programs)
     assert not any(p.name.startswith("Certificate") for p in cat.programs.values())
     assert sum(p.support == "full" for p in cat.programs.values()) >= 50
+
+
+def test_or_similar_course_including():
+    text, _ = parsed("ECN 150 and STA 111, (or similar course, including ANT 380; BIO 380; BEM 201 or STA 311)", "ECN")
+    assert text == "ECN 150 AND (STA 111 OR ANT 380 OR BIO 380 OR BEM 201 OR STA 311)"
