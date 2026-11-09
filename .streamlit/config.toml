@@ -1,0 +1,11 @@
+# Black and gold theme: muted gold page, black text, black sidebar (Wake Forest colors; no logos or marks).
+[theme]
+base = "light"
+primaryColor = "#141414"              # black: buttons, selected tabs, checkboxes, focus rings
+backgroundColor = "#D8C795"           # muted gold page
+secondaryBackgroundColor = "#E8DCB8"  # lighter gold: inputs, tables, chips
+textColor = "#111111"                 # black text
+font = "sans serif"
+
+[client]
+toolbarMode = "minimal"

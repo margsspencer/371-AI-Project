@@ -20,6 +20,7 @@ from gradplanner.planner.terms import Term
 from gradplanner.recommender import Recommender, load_careers
 from gradplanner.recommender.tfidf import WEAK_SCORE
 from gradplanner.planner.replan import OUTCOMES, item_key
+from gradplanner.ui.style import CSS, hero_html, student_html
 from gradplanner.ui.helpers import (CHANGE_ICON, STATUS_ICON, STATUS_TEXT, SUPPORT_TEXT, build_profile, course_label,
                                     profile_to_form, program_ids, program_label, record_and_replan, run_all,
                                     term_options)
@@ -27,9 +28,14 @@ from gradplanner.ui.helpers import (CHANGE_ICON, STATUS_ICON, STATUS_TEXT, SUPPO
 SAMPLES_DIR = config.PROJECT_ROOT / "samples"
 ADVISORY = ("**Advisory only.** This planner reads the 2026-27 Undergraduate Bulletin. Confirm every plan "
             "with your academic advisor and the current Bulletin. Use fictional student data only.")
+TERM_COLUMNS = {"Course": st.column_config.TextColumn(width="small"),
+                "Title": st.column_config.TextColumn(width="medium"),
+                "Hours": st.column_config.NumberColumn(width=50, format="%g"),
+                "Counts toward": st.column_config.TextColumn(width="medium")}
 PLAN_STATUS = {"optimal": "Best plan found", "feasible": "Good plan (time ran out before proving it's the best)"}
 
 st.set_page_config(page_title="WFU Graduation Planner", page_icon="🎓", layout="wide")
+st.markdown(CSS, unsafe_allow_html=True)
 
 
 @st.cache_resource(show_spinner="Loading the Bulletin database...")
@@ -91,7 +97,7 @@ def sidebar(cat) -> dict | None:
     c2.selectbox("First semester to plan", terms, key="f_next_term")
     sb.selectbox("Graduate by", terms, key="f_graduation")
     c1, c2 = sb.columns(2)
-    c1.number_input("Max hours / semester", 12.0, 17.0, step=1.0, key="f_max_hours",
+    c1.number_input("Max hours / semester", 12.0, 17.0, step=1.0, format="%.0f", key="f_max_hours",
                     help="The Bulletin allows up to 17 hours without special permission.")
     c2.number_input("Language courses left", 0, 4, key="f_language_needed",
                     help="Courses still needed to finish one 200-level foreign language course.")
@@ -172,7 +178,8 @@ def show_plan(cat, res) -> None:
                          "Title": it.title, "Hours": it.hours,
                          "Counts toward": ", ".join(plan.labels.get(k, k) for k in it.counts_toward)}
                         for it in tp.items]
-                st.dataframe(pd.DataFrame(rows), hide_index=True, use_container_width=True)
+                st.dataframe(pd.DataFrame(rows), hide_index=True, use_container_width=True,
+                             column_config=TERM_COLUMNS)
     if picks:
         st.caption("⭐ = recommended for your career goal")
     if plan.notes:
@@ -255,7 +262,9 @@ def show_audit(res) -> None:
         st.subheader(name)
         rows = [{"": STATUS_ICON[l.status], "Requirement": l.label, "Status": STATUS_TEXT[l.status],
                  "Details": l.detail} for l in lines]
-        st.dataframe(pd.DataFrame(rows), hide_index=True, use_container_width=True)
+        st.dataframe(pd.DataFrame(rows), hide_index=True, use_container_width=True,
+                     column_config={"": st.column_config.TextColumn(width=40),
+                                    "Status": st.column_config.TextColumn(width="small")})
     for n in audit.notes:
         st.caption(f"Note: {n}")
 
@@ -281,8 +290,8 @@ def main() -> None:
     cat = catalog()
     form = sidebar(cat)
 
-    st.title("WFU Graduation Calendar Planner")
-    st.info(ADVISORY)
+    st.markdown(hero_html(cat.bulletin_year), unsafe_allow_html=True)
+    st.info(ADVISORY, icon="⚖️")
     for pid in form["majors"] + form["minors"]:
         prog = cat.programs[pid]
         if prog.support != "full":
@@ -316,7 +325,8 @@ def main() -> None:
         st.session_state.result_form = repr(form)          # the sidebar now shows the updated profile
     if st.session_state.get("result_form") != repr(form):
         st.warning("The profile changed since this plan was made. Press **Make my plan** to update it.")
-    st.markdown(f"#### {res.student.name} · " + " + ".join(cat.programs[p].name for p in res.student.programs))
+    st.markdown(student_html(res.student.name, " + ".join(cat.programs[p].name for p in res.student.programs)),
+                unsafe_allow_html=True)
     tab_plan, tab_recs, tab_audit, tab_about = st.tabs(["📅 Plan", "⭐ Career picks", "✅ Degree audit", "ℹ️ About"])
     with tab_plan:
         show_plan(cat, res)
