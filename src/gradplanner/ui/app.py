@@ -19,8 +19,10 @@ from gradplanner.planner.requirements import load_settings, program_problems
 from gradplanner.planner.terms import Term
 from gradplanner.recommender import Recommender, load_careers
 from gradplanner.recommender.tfidf import WEAK_SCORE
-from gradplanner.ui.helpers import (STATUS_ICON, STATUS_TEXT, SUPPORT_TEXT, build_profile, course_label,
-                                    profile_to_form, program_ids, program_label, run_all, term_options)
+from gradplanner.planner.replan import OUTCOMES, item_key
+from gradplanner.ui.helpers import (CHANGE_ICON, STATUS_ICON, STATUS_TEXT, SUPPORT_TEXT, build_profile, course_label,
+                                    profile_to_form, program_ids, program_label, record_and_replan, run_all,
+                                    term_options)
 
 SAMPLES_DIR = config.PROJECT_ROOT / "samples"
 ADVISORY = ("**Advisory only.** This planner reads the 2026-27 Undergraduate Bulletin. Confirm every plan "
@@ -51,12 +53,13 @@ ABROAD_PROGRAMS = {"wfu": "Wake Forest program (e.g. Worrell House, Casa Artom, 
                    "affiliate": "Affiliate (non-Wake Forest) program: transfer credit"}
 
 
-def load_form(values: dict) -> None:
+def load_form(values: dict, keep_result: bool = False) -> None:
     for k, v in values.items():
         st.session_state[f"f_{k}"] = v
     st.session_state.outside_df = pd.DataFrame(values["outside"] or [], columns=["name", "hours", "counts_for"])
     st.session_state.pop("outside_editor", None)      # old table edits would apply to the new rows
-    st.session_state.pop("result", None)
+    if not keep_result:
+        st.session_state.pop("result", None)
 
 
 def sample_files() -> dict[str, str]:
@@ -68,6 +71,8 @@ def sidebar(cat) -> dict | None:
     sb.title("🎓 Student profile")
     samples = sample_files()
     choice = sb.selectbox("Start from", ["Blank profile"] + list(samples), key="start_from")
+    if "pending_form" in st.session_state:          # after re-planning: show the updated profile
+        load_form(st.session_state.pop("pending_form"), keep_result=True)
     if sb.button("Load", use_container_width=True) or "f_name" not in st.session_state:
         load_form(BLANK if choice == "Blank profile" else profile_to_form(load_profile(samples[choice]), cat))
 
@@ -152,6 +157,8 @@ def show_plan(cat, res) -> None:
                "re-checks prerequisites, hour limits, offerings, and requirements.")
     for p in res.problems:
         st.error(p)
+    if res.diff:
+        show_diff(res)
 
     picks = {r.course_id for r in res.recommendations}
     for i in range(0, len(plan.terms), 2):
@@ -172,6 +179,46 @@ def show_plan(cat, res) -> None:
         with st.expander(f"Things to check with your advisor ({len(plan.notes)})"):
             for n in plan.notes:
                 st.markdown(f"- {n}")
+    record_form(cat, res)
+
+
+def show_diff(res) -> None:
+    d = res.diff
+    with st.container(border=True):
+        st.markdown(f"**🔄 What changed · {res.diff_title}**")
+        st.markdown(d.summary[0].upper() + d.summary[1:])
+        main = [c for c in d.changes if "elective" not in c.what.lower() or c.kind in ("done", "failed", "retake")]
+        electives = [c for c in d.changes if c not in main]
+        for c in main:
+            st.markdown(f"{CHANGE_ICON[c.kind]} {c.sentence}")
+        if electives:
+            with st.expander(f"Free-elective slots that moved ({len(electives)})"):
+                for c in electives:
+                    st.markdown(f"{CHANGE_ICON[c.kind]} {c.sentence}")
+        if not d.changes:
+            st.markdown("Nothing changed.")
+
+
+def record_form(cat, res) -> None:
+    """Mark how the first planned semester went, then re-plan from the next one."""
+    first = res.plan.terms[0]
+    with st.expander(f"📝 Finished {first.term}? Record how it went and re-plan"):
+        st.caption("Everything is marked passed unless you change it. Failed or dropped courses that are still "
+                   "needed are planned again; the rest of the plan stays as it is where possible.")
+        with st.form("record_term"):
+            outcomes = {}
+            for i, item in enumerate(first.items):
+                label = f"{item.id} – {item.title}" if item.kind == "course" else item.title
+                outcomes[item_key(item, i)] = st.selectbox(label, OUTCOMES, key=f"outcome_{i}_{item.id}")
+            submitted = st.form_submit_button(f"Record {first.term} and re-plan", type="primary")
+        if submitted:
+            outcomes = {k: v for k, v in outcomes.items() if v != "passed"}
+            with st.spinner("Re-planning..."):
+                new = record_and_replan(cat, res, outcomes, recommender())
+            st.session_state.result = new
+            st.session_state.pending_form = profile_to_form(new.student, cat)
+            st.session_state.replanned = True
+            st.rerun()
 
 
 def show_recommendations(cat, res) -> None:
@@ -241,6 +288,11 @@ def main() -> None:
         if prog.support != "full":
             st.warning(f"**{prog.name}:** {SUPPORT_TEXT[prog.support]}")
 
+    res = st.session_state.get("result")
+    keep = False
+    if res is not None and res.plan.ok:
+        keep = st.checkbox("Keep my previous plan where possible", value=True,
+                           help="The new plan changes only what it has to, and lists what changed.")
     if st.button("Make my plan", type="primary"):
         try:
             student = build_profile(**form)
@@ -251,7 +303,8 @@ def main() -> None:
             st.error(str(exc))
         else:
             with st.spinner("Planning your semesters (up to about 10 seconds)..."):
-                st.session_state.result = run_all(cat, student, recommender())
+                st.session_state.result = run_all(cat, student, recommender(),
+                                                  previous=res.plan if keep and res else None)
                 st.session_state.result_form = repr(form)
 
     res = st.session_state.get("result")
@@ -259,6 +312,8 @@ def main() -> None:
         st.markdown("Fill in the profile on the left (or load a sample), then press **Make my plan**.")
         show_about(cat)
         return
+    if st.session_state.pop("replanned", False):
+        st.session_state.result_form = repr(form)          # the sidebar now shows the updated profile
     if st.session_state.get("result_form") != repr(form):
         st.warning("The profile changed since this plan was made. Press **Make my plan** to update it.")
     st.markdown(f"#### {res.student.name} · " + " + ".join(cat.programs[p].name for p in res.student.programs))

@@ -8,6 +8,7 @@ from gradplanner.audit import Audit, run_audit
 from gradplanner.models import Catalog
 from gradplanner.planner import StudentProfile, plan_for_student, validate_plan
 from gradplanner.planner.plan import Plan
+from gradplanner.planner.replan import PlanDiff, diff_plans, record_term
 from gradplanner.planner.requirements import PlannerSettings
 from gradplanner.planner.student import AbroadTerm, CompletedCourse, OutsideCourse
 from gradplanner.planner.terms import Term
@@ -116,11 +117,20 @@ class Result:
     audit: Audit
     recommendations: list[Recommendation] = field(default_factory=list)
     goal_label: str = ""
+    diff: PlanDiff | None = None              # compared with the previous plan (re-planning)
+    diff_title: str = ""
+
+
+CHANGE_ICON = {"done": "✅", "failed": "❌", "retake": "🔁", "moved": "↔️", "added": "➕", "removed": "➖"}
 
 
 def run_all(catalog: Catalog, student: StudentProfile, recommender: Recommender | None = None,
-            time_limit: float = 10, top_n: int = 5, settings: PlannerSettings | None = None) -> Result:
-    """Recommend, plan, check, and audit: the whole flow behind the 'Make my plan' button."""
+            time_limit: float = 10, top_n: int = 5, settings: PlannerSettings | None = None,
+            previous: Plan | None = None, outcomes: dict[str, str] | None = None,
+            recorded: Term | None = None) -> Result:
+    """Recommend, plan, check, and audit: the whole flow behind the 'Make my plan' button.
+    With `previous`, the new plan keeps that plan's choices where it can and the result
+    lists what changed (`recorded` + `outcomes`: the semester that was just finished)."""
     recs, relevance, label = [], None, ""
     query, label = career_query(student.career, student.career_text)
     if query:
@@ -128,7 +138,20 @@ def run_all(catalog: Catalog, student: StudentProfile, recommender: Recommender 
         recs = rec.recommend(query, student.programs, student.completed_ids, top_n, label,
                              skip=business_skip(catalog, student))
         relevance = rec.scores(query)
-    plan = plan_for_student(catalog, student, settings, time_limit=time_limit, relevance=relevance)
+    usable = previous if previous is not None and previous.ok else None
+    plan = plan_for_student(catalog, student, settings, time_limit=time_limit, relevance=relevance, previous=usable)
     problems = validate_plan(plan, catalog, student, settings) if plan.ok else []
     audit = run_audit(catalog, student, plan if plan.ok else None, settings)
-    return Result(student, plan, problems, audit, recs, label)
+    res = Result(student, plan, problems, audit, recs, label)
+    if usable and plan.ok:
+        res.diff = diff_plans(usable, plan, outcomes, recorded)
+        res.diff_title = (f"After {recorded}" if recorded else "Compared with your previous plan")
+    return res
+
+
+def record_and_replan(catalog: Catalog, previous: Result, outcomes: dict[str, str],
+                      recommender: Recommender | None = None, **kw) -> Result:
+    """Mark the plan's first semester (passed / failed / dropped per item), then re-plan."""
+    after = record_term(previous.student, previous.plan, outcomes)
+    return run_all(catalog, after, recommender, previous=previous.plan, outcomes=outcomes,
+                   recorded=previous.plan.terms[0].term, **kw)

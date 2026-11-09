@@ -115,6 +115,7 @@ def validate_plan(plan: Plan, catalog: Catalog, student: StudentProfile,
                 problems.append(f"Not met: {need.label} (need {it.n} of {', '.join(it.options)}).")
         elif it.kind == "hours":
             total = slots.get(need.key, 0) * ABROAD_COURSE_HOURS            # abroad courses toward this rule
+            total += sum(o.hours for o in student.outside_courses if o.counts_for == need.key)   # earned abroad
             for cid in counts.get(need.key, []):
                 course = catalog.courses[cid]
                 if not fits_hours_rule(course, need, pid, catalog):

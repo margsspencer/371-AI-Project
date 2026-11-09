@@ -38,6 +38,8 @@ Objective, most important first
   4. no unneeded catalog courses; prefer the student's interests, then courses
      that match their career goal (relevance scores 0-100 from the recommender)
   5. required courses and core slots as early as possible
+  When re-planning (`previous` given), between 1 and 2: keep courses and slots in
+  the semesters they were already in, so only what has to change moves.
 
 Assumptions: a course may count toward the major, one division, one 21CS
 category, and QR at the same time. With two majors (or a major and minors), a
@@ -48,6 +50,7 @@ with Neuroscience) are refused before planning.
 
 from __future__ import annotations
 
+from collections import Counter
 from dataclasses import dataclass
 
 from ortools.sat.python import cp_model
@@ -59,7 +62,7 @@ from gradplanner.planner.requirements import (
     ABROAD_COURSE_HOURS, PlannerSettings, abroad_category_ok, abroad_problems, abroad_program_cap,
     admission_courses, business_reason, core_needs, countable_hours,
     course_counts_for_core, fits_hours_rule, is_business_student, load_settings, needed_courses, program_needs,
-    program_problems, rule_or, schedulable_reason, student_needs,
+    outside_hours_toward, program_problems, rule_or, schedulable_reason, student_needs,
 )
 from gradplanner.planner.student import StudentProfile
 from gradplanner.planner.terms import Term
@@ -128,11 +131,14 @@ class _Ctx:
 
 
 def plan_for_student(catalog: Catalog, student: StudentProfile, settings: PlannerSettings | None = None,
-                     time_limit: float = 10.0, workers: int = 8, relevance: dict[str, int] | None = None) -> Plan:
+                     time_limit: float = 10.0, workers: int = 8, relevance: dict[str, int] | None = None,
+                     previous: Plan | None = None) -> Plan:
     """Build the best plan for `student`, or explain why none exists.
 
     `relevance` ({course_id: 0-100}, from the recommender) makes the planner
     prefer career-relevant courses when it picks electives.
+    `previous` (an earlier plan for this student) makes it keep that plan's
+    choices where it still can, for re-planning after a semester or a change.
     """
     settings = settings or load_settings(catalog)
     unknown = [p for p in student.programs if p not in catalog.programs]
@@ -159,15 +165,15 @@ def plan_for_student(catalog: Catalog, student: StudentProfile, settings: Planne
     if is_business_student(catalog, student, settings):
         plan.notes.append("School of Business courses are planned from sophomore spring on (after admission to "
                           "the School of Business); only the admission prerequisites come earlier.")
-    builder = _Builder(ctx, plan, relevance or {})
+    builder = _Builder(ctx, plan, relevance or {}, previous)
     builder.build()
     builder.solve(time_limit, workers)
     return plan
 
 
 class _Builder:
-    def __init__(self, ctx: _Ctx, plan: Plan, relevance: dict[str, int]) -> None:
-        self.ctx, self.plan, self.relevance = ctx, plan, relevance
+    def __init__(self, ctx: _Ctx, plan: Plan, relevance: dict[str, int], previous: Plan | None = None) -> None:
+        self.ctx, self.plan, self.relevance, self.previous = ctx, plan, relevance, previous
         self.cat, self.st, self.terms = ctx.catalog, ctx.student, ctx.terms
         self.programs = [self.cat.programs[p] for p in self.st.programs]
         self.m = cp_model.CpModel()
@@ -376,7 +382,8 @@ class _Builder:
                     self.hrs[(cid, need.key)] = v
                     terms.append(h(countable_hours(course, need.program_id, self.cat)) * v)
             terms += [h(ABROAD_COURSE_HOURS) * v for (k, _), v in self.abr.items() if k == need.key]
-            self.m.add(sum(terms) >= h(need.item.hours or 0)).only_enforce_if(self._need_switch(need.key))
+            already = h(outside_hours_toward(self.st, need))          # e.g. credit already earned abroad
+            self.m.add(sum(terms) + already >= h(need.item.hours or 0)).only_enforce_if(self._need_switch(need.key))
         # Limits on abroad credit toward each program (all abroad terms; affiliate terms alone).
         for prog in self.programs:
             mine = [(ti, v) for (k, ti), v in self.abr.items() if k.startswith(prog.id + ":")]
@@ -431,6 +438,7 @@ class _Builder:
             self.m.add(dev >= self.load[ti] - target)
             self.m.add(dev >= target - self.load[ti])
             obj.append(10 * dev)
+        obj += self._stability()
         obj.append(500 * sum(v for per in self.slot.values() for ti, v in per.items()   # 3. fewer core slots
                              if ti not in self.abroad))
         # Abroad: divisionals and major/minor credit are what students go for; plain electives last.
@@ -448,6 +456,33 @@ class _Builder:
             else:
                 obj.append(sum(20 * ti * v for ti, v in per_term.items()))   # 5. required courses early
         self.m.minimize(sum(obj))
+
+    KEEP_SAME_TERM = 3000      # below one extra hour (10 tenths x 1000), above balance and preferences
+    KEEP_IN_PLAN = 1500
+
+    def _stability(self) -> list:
+        """Rewards (negative costs) for keeping the previous plan's choices."""
+        if not self.previous:
+            return []
+        index = {t: ti for ti, t in enumerate(self.terms)}
+        obj = []
+        for tp in self.previous.terms:
+            ti = index.get(tp.term)
+            for item in tp.items:
+                if item.kind == "course" and item.id in self.take:
+                    per = self.take[item.id]
+                    obj.append(-self.KEEP_IN_PLAN * self.taken[item.id])
+                    if ti in per:
+                        obj.append(-self.KEEP_SAME_TERM * per[ti])
+            if ti is None:
+                continue
+            for cat, n in Counter(i.id for i in tp.items if i.kind == "core_slot").items():
+                var = self.slot.get(cat, {}).get(ti)
+                if var is not None:
+                    kept = self.m.new_int_var(0, n, f"kept[{cat},{tp.term}]")
+                    self.m.add(kept <= var)
+                    obj.append(-self.KEEP_SAME_TERM * kept)
+        return obj
 
     # ------------------------------------------------------------------ solve
 

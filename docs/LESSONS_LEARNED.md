@@ -273,3 +273,15 @@ concentrations, and self-designed majors are out.
     senior year at Wake Forest) and a few department limits (Sociology 6 h,
     Spanish 3 h from affiliate programs). Most College departments say
     nothing, so the 6-hour default is a labeled team assumption.
+
+43. **Re-planning needs stability.** Without the old plan, failing one
+    course reshuffled 22 things (the solver picks any of many equally good
+    plans). With a reward for keeping each course in its old semester, the
+    same change moved only the 10 courses that depend on it. The reward is
+    smaller than one extra credit hour, so the planner never adds hours just
+    to keep a course where it was.
+
+44. **Recording a semester touches more than courses.** Passed slots
+    ("Division I course", abroad courses) become finished outside credit for
+    the same requirement, including major credit earned abroad, and an
+    abroad semester that's over is removed from the profile.

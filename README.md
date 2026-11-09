@@ -98,7 +98,21 @@ and what each counts toward), notes to check with an advisor, and the result
 of the independent plan check. If no plan fits, it says why. Profiles are
 YAML files with **fake data only**; copy a sample to make a new one.
 
-## Career recommendations
+## Re-plan after a semester
+
+```bash
+python scripts/replan.py samples/sam_first_year_bs.yaml --failed "CSC 111"
+python scripts/replan.py samples/jordan_junior_bs.yaml --dropped "CSC 250" --save after.yaml
+```
+
+Marks the first planned semester (everything passed unless listed as failed or
+dropped), plans again from the next semester, and lists what changed: done, failed and
+planned again, moved, added, removed. The new plan keeps the old one's choices where it
+can, so a failed course moves only the courses that depend on it. In the web app, open
+**Finished <semester>? Record how it went and re-plan** under the plan; the sidebar then
+shows the updated profile. "Make my plan" after editing the profile also compares with
+the previous plan (untick "Keep my previous plan where possible" for a fresh one).
+
 
 ```bash
 python scripts/recommend.py --list                           # career pick-list

@@ -42,8 +42,9 @@ class OutsideCourse:
     """A finished course from a department we don't scrape, e.g. a history class."""
     name: str
     hours: float
-    counts_for: str | None = None   # a core category id like "DIV-I", or None for a plain elective
-    source: str = "wfu"
+    counts_for: str | None = None   # a core category id like "DIV-I", a major/minor rule key like
+                                    # "FIN-BS:1.0" (credit from abroad), or None for a plain elective
+    source: str = "wfu"             # wfu | ap | transfer | affiliate (non-Wake Forest study abroad)
 
 
 @dataclass
@@ -112,7 +113,9 @@ class StudentProfile:
 
 
 def profile_from_dict(d: dict) -> StudentProfile:
-    programs = list(d.get("majors") or ([d["program"]] if d.get("program") else [])) + list(d.get("minors") or [])
+    programs = list(d.get("programs") or [])         # all majors and minors, main major first
+    if not programs:
+        programs = list(d.get("majors") or ([d["program"]] if d.get("program") else [])) + list(d.get("minors") or [])
     if not programs:
         raise ValueError("a profile needs 'program' (or 'majors' / 'minors')")
     p = StudentProfile(
@@ -144,3 +147,28 @@ def profile_from_dict(d: dict) -> StudentProfile:
 
 def load_profile(path: str | Path) -> StudentProfile:
     return profile_from_dict(yaml.safe_load(Path(path).read_text()))
+
+
+def profile_to_dict(p: StudentProfile) -> dict:
+    """The YAML form of a profile (what load_profile reads)."""
+    d = {"name": p.name}
+    if len(p.programs) == 1:
+        d["program"] = p.program
+    else:
+        d["programs"] = p.programs                       # main major first, then second major / minors
+    d.update({
+        "entry_term": str(p.entry_term), "next_term": str(p.next_term), "graduation_term": str(p.graduation_term),
+        "max_hours_per_term": p.max_hours_per_term, "include_summer": p.include_summer,
+        "summer_max_hours": p.summer_max_hours, "language_courses_needed": p.language_courses_needed,
+        "completed": [{"course": c.course, "source": c.source} for c in p.completed],
+        "in_progress": list(p.in_progress),
+        "outside_courses": [{"name": o.name, "hours": o.hours, "counts_for": o.counts_for, "source": o.source}
+                            for o in p.outside_courses],
+        "interests": list(p.interests), "career": p.career, "career_text": p.career_text,
+        "abroad": [{"term": str(a.term), "program": a.program, "location": a.location} for a in p.abroad],
+    })
+    return d
+
+
+def save_profile(p: StudentProfile, path: str | Path) -> None:
+    Path(path).write_text("# FICTIONAL student (saved by the planner)\n" + yaml.safe_dump(profile_to_dict(p), sort_keys=False))

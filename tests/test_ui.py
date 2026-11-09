@@ -106,3 +106,20 @@ def test_app_study_abroad():
     _make_plan(at)
     assert {m.label: m.value for m in at.metric}["Plan check"] == "Valid ✅"
     assert any("Study abroad: London" in m.value for m in at.markdown)
+
+
+def test_app_record_semester_and_replan():
+    at = _app()
+    at.sidebar.selectbox(key="start_from").select("Sam Example (fictional)")
+    at.sidebar.button[0].click().run()
+    _make_plan(at)
+    boxes = [s for s in at.selectbox if s.key and s.key.startswith("outcome_")]
+    failed = boxes[0].label.split(" – ")[0]
+    boxes[0].select("failed")
+    next(b for b in at.button if "and re-plan" in b.label).click().run()
+    assert not at.exception
+    assert at.session_state["f_next_term"] == "Spring 2027"           # the sidebar shows the updated profile
+    assert failed not in at.session_state["f_completed"]
+    assert any(m.value.startswith("🔁 " + failed) for m in at.markdown)
+    assert {m.label: m.value for m in at.metric}["Plan check"] == "Valid ✅"
+    assert not any("profile changed" in w.value for w in at.warning)

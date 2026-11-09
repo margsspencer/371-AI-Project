@@ -246,6 +246,18 @@ class CoreNeed:
         return self.category.id
 
 
+def outside_counts_for_core(source: str, kind: str) -> bool:
+    """AP/transfer never count for divisional or 21CS; affiliate study abroad counts for divisionals, not 21CS."""
+    if source == "affiliate":
+        return kind != "21cs"
+    return source == "wfu" or kind not in ("division", "21cs")
+
+
+def outside_hours_toward(student: StudentProfile, need: ProgramNeed) -> float:
+    """Finished outside credit recorded for a major/minor hours rule (e.g. a course taken abroad)."""
+    return sum(o.hours for o in student.outside_courses if o.counts_for == need.key)
+
+
 def division_subjects(category: CoreCategory, settings: PlannerSettings) -> set[str]:
     depts = category.departments or ""
     return {subj for subj, name in settings.subject_departments.items()
@@ -282,7 +294,7 @@ def core_needs(catalog: Catalog, student: StudentProfile, settings: PlannerSetti
         if cat.family == "basic" and cat.course_cnf and cnf_satisfied(cat.course_cnf, student.completed_ids):
             required = 0
         for oc in student.outside_courses:
-            if oc.counts_for == cat.id and not (oc.source != "wfu" and kind in ("division", "21cs")):
+            if oc.counts_for == cat.id and outside_counts_for_core(oc.source, kind):
                 required -= 1
         needs.append(CoreNeed(cat, max(0, required), settings.slot_hours(cat.id), kind,
                               TIMING_LAST_YEAR.get(cat.timing or ""), one_per_term=(cat.id == "BASIC-LANG")))
