@@ -7,6 +7,8 @@ __pycache__/
 data/raw/
 data/staging/
 data/*.db
+# The built database is committed so the hosted app has data (rebuild with scripts/build_db.py)
+!data/bulletin_2026-2027.db
 data/validation_report.md
 .env
 

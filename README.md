@@ -1,4 +1,4 @@
-# Graduation Calendar Planner (WFU): CSC 371 AI Project
+# Graduation Planner (WFU): CSC 371 AI Project
 
 Plans a semester-by-semester path to graduation for Wake Forest students in
 any College major or minor or School of Business program (122 programs; see

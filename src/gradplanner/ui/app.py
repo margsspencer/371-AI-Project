@@ -10,6 +10,11 @@ Fictional students only; advisory only.
 from __future__ import annotations
 
 import re
+import sys
+from pathlib import Path
+
+# Make `gradplanner` importable when the package isn't installed (e.g. on Streamlit Community Cloud).
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 import pandas as pd
 import streamlit as st
