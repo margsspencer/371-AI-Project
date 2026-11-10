@@ -285,3 +285,21 @@ concentrations, and self-designed majors are out.
     ("Division I course", abroad courses) become finished outside credit for
     the same requirement, including major credit earned abroad, and an
     abroad semester that's over is removed from the profile.
+
+45. **The calendar only covers one year.** The Bulletin publishes 2026-27
+    dates, but a plan runs four years. Later years are projected onto the
+    same weekdays (52-week steps, kept within three days of the same date)
+    and every projected event says "(estimated)". The parser also catches
+    the Bulletin's own typo ("April 26, Wednesday" is a Monday) and reports it.
+
+46. **Overloads as a last resort.** Each overloaded semester costs more in the
+    objective than any preference, and every extra hour costs more again, so
+    the planner uses as few and as small overloads as it can. A test first
+    expected one overload where the solver used two; the solver was right:
+    with 3-hour electives the student needed 28 hours, not 27.
+47. **A second table isn't always a requirement.** Finance, B.S. lists six extra
+    accounting courses under "Required Additional Courses", but the sentence above
+    the table says they are only for students heading to the Master of Science in
+    Accountancy. The parser read the heading, not the sentence, so every Finance
+    plan carried 13.5 unneeded hours. A user who knows the major caught it. Tables
+    introduced as an optional track are now kept as a note, not planned.

@@ -77,8 +77,8 @@ def test_checker_catches_abroad_mistakes(cat):
     plan = plan_for_student(cat, st)
     tp = abroad_term(plan, Term("fall", 2028))
     tp.items.append(PlanItem("ABROAD", "Abroad course", 3, "abroad", ["21CS-EI"]))
-    tp.items.append(PlanItem("ABROAD", "Abroad course", 3, "abroad", ["FIN-BS:1.0"] * 1))
-    tp.items.append(PlanItem("ABROAD", "Abroad course", 3, "abroad", ["FIN-BS:1.0"]))
+    for _ in range(3):                                    # 9 hours toward the major, over the cap of 6
+        tp.items.append(PlanItem("ABROAD", "Abroad course", 3, "abroad", ["FIN-BS:1.0"]))
     home = plan.terms[0]
     home.items.append(PlanItem("ABROAD", "Abroad course", 3, "abroad"))
     problems = " | ".join(validate_plan(plan, cat, st))

@@ -9,3 +9,6 @@ data/staging/
 data/*.db
 data/validation_report.md
 .env
+
+# Exported plans (scripts/export.py)
+exports/

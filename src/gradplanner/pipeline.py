@@ -22,6 +22,7 @@ import yaml
 
 from gradplanner import config
 from gradplanner.models import Catalog, Course, Offering
+from gradplanner.parser.calendar import parse_calendar_page
 from gradplanner.parser.core import CoreCategory, parse_advising_page, parse_core_page
 from gradplanner.parser.courses import COURSE_CODE, RawCourse, parse_courses_page
 from gradplanner.parser.prereq import clean_prereq_text, parse_prereq
@@ -244,9 +245,11 @@ def build_catalog(fetcher: PoliteFetcher | None = None,
             extra["id"], extra["family"], extra["name"], extra["courses_required"], tag=extra.get("tag"),
             placeholder=True, rules_note=extra.get("note"), source=extra.get("source", "team")))
 
+    calendar, cal_problems = parse_calendar_page(page("calendar"))
+    problems += cal_problems
     catalog = Catalog(
         bulletin_year=config.BULLETIN_YEAR, courses=courses, programs=programs, core=core,
         rules={r.key: r for r in rules + adv_rules}, exclusions=exclusions,
-        subjects=subject_names(manifest),
+        subjects=subject_names(manifest), calendar=calendar,
     )
     return catalog, problems

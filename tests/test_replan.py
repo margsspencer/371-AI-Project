@@ -115,7 +115,7 @@ def real():
 def test_real_failed_course_replan(real):
     st = load_profile("samples/sam_first_year_bs.yaml")
     plan = plan_for_student(real, st)
-    fail = next(c for c in plan.terms[0].course_ids if c.startswith("CSC"))
+    fail = plan.terms[0].course_ids[0]          # whichever course the plan starts with
     after = record_term(st, plan, {fail: "failed"})
     new = plan_for_student(real, after, previous=plan)
     assert new.ok and validate_plan(new, real, after) == []

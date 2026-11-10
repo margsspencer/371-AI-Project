@@ -56,7 +56,8 @@ def build_profile(*, name: str, majors: list[str], minors: list[str], entry: str
                   ap_credit: list[str], in_progress: list[str], outside: list[dict],
                   interests: list[str], career: str | None, career_text: str, abroad: bool = False,
                   abroad_terms: list[str] = (), abroad_program: str = "wfu",
-                  abroad_location: str = "") -> StudentProfile:
+                  abroad_location: str = "", overload: bool = False, overload_hours: float = 19,
+                  overload_terms: int = 2) -> StudentProfile:
     """A profile from the sidebar form. Raises ValueError with a readable message on bad input."""
     if not majors:
         raise ValueError("Choose at least one major.")
@@ -86,7 +87,8 @@ def build_profile(*, name: str, majors: list[str], minors: list[str], entry: str
         language_courses_needed=language_needed, completed=done, in_progress=list(in_progress),
         outside_courses=rows, interests=list(interests), career=career or None, career_text=career_text.strip(),
         abroad=[AbroadTerm(Term.parse(t), abroad_program, abroad_location.strip())
-                for t in (abroad_terms if abroad else [])])
+                for t in (abroad_terms if abroad else [])],
+        overload_hours=float(overload_hours) if overload else 0, overload_terms=int(overload_terms))
 
 
 def profile_to_form(st: StudentProfile, catalog: Catalog) -> dict:
@@ -106,6 +108,8 @@ def profile_to_form(st: StudentProfile, catalog: Catalog) -> dict:
         "abroad": bool(st.abroad), "abroad_terms": [str(a.term) for a in st.abroad],
         "abroad_program": st.abroad[0].program if st.abroad else "wfu",
         "abroad_location": st.abroad[0].location if st.abroad else "",
+        "overload": st.overload_hours > 0, "overload_hours": float(st.overload_hours or 19),
+        "overload_terms": int(st.overload_terms),
     }
 
 

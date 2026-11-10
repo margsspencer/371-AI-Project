@@ -78,6 +78,9 @@ _LEVEL_PHRASES = [
 # Tables that show a sample schedule or advice, not requirements.
 SCHEDULE_HINT = re.compile(r"typical|sample (?:schedule|plan)|suggested (?:schedule|plan|sequence)|"
                            r"well[- ]positioned|four[- ]year (?:plan|schedule)|plan of study", re.I)
+# Tables for an optional track, not the degree itself: Finance, B.S. lists the accounting
+# courses needed only by students heading to the Master of Science in Accountancy.
+OPTIONAL_TRACK = re.compile(r"interest in pursuing the master|would be required to take the additional", re.I)
 
 
 @dataclass
@@ -366,6 +369,7 @@ def parse_program_page(html: str, program_id: str, source_key: str, subject: str
             linked[anchor] = table
 
     per_table: list[tuple[str, list[RequirementGroup]]] = []
+    optional: list[RequirementGroup] = []
     for t in tables:
         if any(t is lt for lt in linked.values()):
             continue                       # a list that a row links to; read as that row's options
@@ -373,6 +377,11 @@ def parse_program_page(html: str, program_id: str, source_key: str, subject: str
         if SCHEDULE_HINT.search(heading) or any(
                 _norm(r.get_text(" ")) in ("first year", "sophomore year", "junior year", "senior year")
                 for r in t.select("tr.areaheader")):
+            continue
+        if OPTIONAL_TRACK.search(heading):         # shown as a note, not planned
+            codes = [c for row in t.select("tr") for c in _row_codes(row)]
+            optional.append(RequirementGroup("Optional track (not required for this degree)", [
+                RequirementItem("note", f"{heading} {', '.join(codes)}")]))
             continue
         per_table.append((_norm(heading), _parse_table(t, program, subject_names, named, linked)))
 
@@ -391,6 +400,7 @@ def parse_program_page(html: str, program_id: str, source_key: str, subject: str
         program.groups.extend(groups)
     _resolve_group_references(program, named)
     _approved_lists(program)
+    program.groups += optional
 
     for g in program.groups:
         for item in g.items:

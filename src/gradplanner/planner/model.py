@@ -18,7 +18,9 @@ Variables
 Rules (each group has an on/off switch, used to explain "no valid plan")
   course rules   each course at most once; prerequisites in an earlier term; corequisites
                  in the same or earlier term; class standing; "credit not allowed for both"
-  term limits    hours per term <= the student's maximum (never above the Bulletin's 17)
+  term limits    hours per term <= the student's maximum (never above the Bulletin's 17), except
+                 overloads the student allows: up to `overload_hours` in at most
+                 `overload_terms` regular semesters, used only when needed
   major/minor    every required course; every "choose" list; every elective-hours rule, for
                  each of the student's majors and minors (one switch per requirement, so an
                  explanation can name it)
@@ -213,6 +215,8 @@ class _Builder:
         self.abroad = {ti: a for ti, t in enumerate(self.terms) if (a := self.st.abroad_in(t))}
         self.skipped = unplannable_needs(self.cat, self.st)
         self.abr: dict[tuple[str, int], cp_model.IntVar] = {}
+        self.over: dict[int, cp_model.IntVar] = {}       # 1 if semester ti is an overload
+        self.excess: dict[int, cp_model.IntVar] = {}     # tenths of hours above the normal limit
         self.objective_terms: list = []
 
     # ------------------------------------------------------------------ build
@@ -269,10 +273,19 @@ class _Builder:
             expr += sum(h(n.slot_hours) * self.slot[n.id][ti] for n in self.cneeds if ti in self.slot[n.id])
             self.load[ti] = self.m.new_int_var(0, h(40), f"load[{term}]")
             self.m.add(self.load[ti] == expr)
-            self.m.add(self.load[ti] <= h(self.st.max_hours(term, bulletin_max))).only_enforce_if(
-                self.sw["term_limits"])
+            base = h(self.st.max_hours(term, bulletin_max))
+            if self.st.can_overload(term) and self.st.overload_hours * SCALE > base:
+                self.over[ti] = self.m.new_bool_var(f"overload[{term}]")
+                self.excess[ti] = self.m.new_int_var(0, h(self.st.overload_hours) - base, f"excess[{term}]")
+                self.m.add(self.excess[ti] >= self.load[ti] - base)
+                self.m.add(self.excess[ti] <= (h(self.st.overload_hours) - base) * self.over[ti])
+                self.m.add(self.load[ti] <= base + self.excess[ti]).only_enforce_if(self.sw["term_limits"])
+            else:
+                self.m.add(self.load[ti] <= base).only_enforce_if(self.sw["term_limits"])
             if ti in self.abroad:
                 self.m.add(self.load[ti] >= h(self.ctx.settings.abroad.min_hours)).only_enforce_if(self.sw["abroad"])
+        if self.over:
+            self.m.add(sum(self.over.values()) <= self.st.overload_terms).only_enforce_if(self.sw["term_limits"])
         # Transfer-credit limit: AP/transfer already earned + affiliate abroad hours.
         affiliate = [self.load[ti] for ti, a in self.abroad.items() if a.program == "affiliate"]
         if affiliate:
@@ -432,6 +445,10 @@ class _Builder:
         normal = h(rule_or(self.cat, "normal_hours_per_semester", 15))
         obj = []
         obj.append(1000 * sum(self.load.values()))                    # 1. no extra hours
+        # Overloads only when needed: each one costs more than any preference below,
+        # and every extra hour in it costs more again (so 18 h beats 19 h). Later
+        # semesters are slightly cheaper: an overload is easier once students settle in.
+        obj.append(sum((60000 - 2000 * ti) * v for ti, v in self.over.items()) + 3000 * sum(self.excess.values()))
         for ti, term in enumerate(self.terms):                         # 2. balanced loads
             target = 0 if term.season == "summer" else normal
             dev = self.m.new_int_var(0, h(40), f"dev[{term}]")
@@ -503,7 +520,7 @@ class _Builder:
             self.plan.status = "unknown"
             several = " This combination of programs may need more semesters." if len(self.programs) > 1 else ""
             self.plan.explanations = [f"The solver found no plan within {time_limit:g} seconds.{several} "
-                                      "Try a later graduation term, a higher hour limit, or summer terms."]
+                                      f"Try a later graduation term, a higher hour limit, {self._more_room()}."]
 
     def _all_switches(self) -> list:
         return list(self.sw.values()) + list(self.need_sw.values())
@@ -536,7 +553,13 @@ class _Builder:
         parts = [SWITCHES[n] if n in SWITCHES else f"the requirement '{self.plan.labels.get(n, n)}'"
                  for n in conflict]
         return [f"No plan fits by {self.terms[-1]}, given when courses are offered: these rules conflict: "
-                + "; ".join(parts) + ". Try a later graduation term, a higher hour limit, or summer terms."]
+                + "; ".join(parts) + f". Try a later graduation term, a higher hour limit, {self._more_room()}."]
+
+    def _more_room(self) -> str:
+        options = [] if self.st.include_summer else ["summer terms"]
+        options += [] if self.st.overload_hours else ["allowing overloads"]
+        options = options or ["fewer programs"]
+        return ("or " if len(options) == 1 else ", ".join(options[:-1]) + ", or ") + options[-1]
 
     def _counts(self, cid: str, solver: cp_model.CpSolver) -> list[str]:
         keys = []
@@ -590,6 +613,13 @@ class _Builder:
             self.plan.terms.append(tp)
         for cid in self.done:
             self.plan.completed_counts[cid] = self._counts(cid, solver)
+        bulletin_max = rule_or(self.cat, "max_hours_per_semester", 17)
+        for ti in self.over:
+            tp = self.plan.terms[ti]
+            if tp.hours > self.st.max_hours(tp.term, bulletin_max):
+                self.plan.notes.append(f"{tp.term}: {tp.hours:g} hours is an overload (above "
+                                       f"{self.st.max_hours(tp.term, bulletin_max):g}); it needs permission. "
+                                       "Talk to your advisor before registering.")
         if defaults_used:
             self.plan.notes.append(f"{len(defaults_used)} planned courses use the assumed fall + spring schedule "
                                    "(the Bulletin doesn't say when they run). Confirm with the department.")

@@ -9,17 +9,22 @@ Fictional students only; advisory only.
 
 from __future__ import annotations
 
+import re
+
 import pandas as pd
 import streamlit as st
+import yaml
 
 from gradplanner import config
 from gradplanner.db.store import default_db_path, load_catalog
 from gradplanner.planner import load_profile
-from gradplanner.planner.requirements import load_settings, program_problems
+from gradplanner.planner.requirements import load_settings, program_problems, rule_or
 from gradplanner.planner.terms import Term
 from gradplanner.recommender import Recommender, load_careers
 from gradplanner.recommender.tfidf import WEAK_SCORE
+from gradplanner.export import plan_to_csv, plan_to_ics
 from gradplanner.planner.replan import OUTCOMES, item_key
+from gradplanner.planner.student import profile_to_dict
 from gradplanner.ui.style import CSS, hero_html, student_html
 from gradplanner.ui.helpers import (CHANGE_ICON, STATUS_ICON, STATUS_TEXT, SUPPORT_TEXT, build_profile, course_label,
                                     profile_to_form, program_ids, program_label, record_and_replan, run_all,
@@ -54,7 +59,7 @@ BLANK = {"name": "New Student (fictional)", "majors": ["CSC-BS"], "minors": [], 
          "graduation": "Spring 2030", "max_hours": 17.0, "summer": False, "language_needed": 1,
          "completed": [], "ap_credit": [], "in_progress": [], "outside": [], "interests": [],
          "career": "", "career_text": "", "abroad": False, "abroad_terms": [], "abroad_program": "wfu",
-         "abroad_location": ""}
+         "abroad_location": "", "overload": False, "overload_hours": 19.0, "overload_terms": 2}
 ABROAD_PROGRAMS = {"wfu": "Wake Forest program (e.g. Worrell House, Casa Artom, Flow House)",
                    "affiliate": "Affiliate (non-Wake Forest) program: transfer credit"}
 
@@ -102,6 +107,12 @@ def sidebar(cat) -> dict | None:
     c2.number_input("Language courses left", 0, 4, key="f_language_needed",
                     help="Courses still needed to finish one 200-level foreign language course.")
     sb.checkbox("Allow summer courses", key="f_summer")
+    if sb.checkbox("Allow overloads if needed", key="f_overload",
+                   help="More than 17 hours in a semester needs permission (Bulletin). The planner overloads "
+                        "only when the plan can't fit otherwise, and never in summer or abroad."):
+        c1, c2 = sb.columns(2)
+        c1.number_input("Up to (hours)", 18.0, 21.0, step=1.0, format="%.0f", key="f_overload_hours")
+        c2.number_input("In at most (semesters)", 1, 4, key="f_overload_terms")
 
     sb.subheader("Courses")
     fmt = lambda c: course_label(cat, c)          # noqa: E731
@@ -172,7 +183,10 @@ def show_plan(cat, res) -> None:
         for col, tp in zip(cols, plan.terms[i:i + 2]):
             with col.container(border=True):
                 where = f" · 🌍 Study abroad: {tp.abroad}" if tp.abroad else ""
-                st.markdown(f"**{tp.term}** · {tp.hours:g} hours{where}")
+                over = (" · ⚠️ overload (needs permission)"
+                        if tp.hours > res.student.max_hours(tp.term, rule_or(cat, "max_hours_per_semester", 17))
+                        else "")
+                st.markdown(f"**{tp.term}** · {tp.hours:g} hours{over}{where}")
                 rows = [{"Course": ("⭐ " if it.id in picks else "") + (it.id if it.kind == "course" else
                                                                          "🌍" if it.kind == "abroad" else ""),
                          "Title": it.title, "Hours": it.hours,
@@ -186,7 +200,23 @@ def show_plan(cat, res) -> None:
         with st.expander(f"Things to check with your advisor ({len(plan.notes)})"):
             for n in plan.notes:
                 st.markdown(f"- {n}")
+    downloads(cat, res, picks)
     record_form(cat, res)
+
+
+def downloads(cat, res, picks) -> None:
+    stem = re.sub(r"[^a-z0-9]+", "_", res.student.name.lower()).strip("_") or "plan"
+    st.markdown("**Save your plan**")
+    c1, c2, c3 = st.columns(3)
+    c1.download_button("📊 Spreadsheet (.csv)", plan_to_csv(res.plan, picks), f"{stem}_plan.csv", "text/csv",
+                       use_container_width=True)
+    c2.download_button("📅 Calendar (.ics)", plan_to_ics(res.plan, cat), f"{stem}_plan.ics", "text/calendar",
+                       use_container_width=True,
+                       help="Import into Google Calendar, Apple Calendar, or Outlook. Dates after 2026-27 "
+                            "are estimated from this year's Bulletin calendar.")
+    c3.download_button("🎓 Profile (.yaml)", yaml.safe_dump(profile_to_dict(res.student), sort_keys=False),
+                       f"{stem}_profile.yaml", "text/yaml", use_container_width=True,
+                       help="Your profile as a file; load it with the command-line tools to re-plan later.")
 
 
 def show_diff(res) -> None:

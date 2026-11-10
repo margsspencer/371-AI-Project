@@ -131,16 +131,14 @@ CREATE TABLE degree_rule (
     source_text  TEXT NOT NULL                  -- the Bulletin sentence it came from
 );
 
--- Filled in milestone 8 (export); kept here so the schema is complete.
-CREATE TABLE term_calendar (
-    term_id        TEXT PRIMARY KEY,            -- 'fall-2026'
-    bulletin_year  TEXT NOT NULL,
-    season         TEXT NOT NULL,
-    year           INTEGER NOT NULL,
-    classes_begin  TEXT,
-    classes_end    TEXT,
-    exams_end      TEXT,
-    is_estimated   INTEGER NOT NULL
+-- Academic calendar rows (milestone 8): one per Bulletin calendar line.
+-- Later years are projected when needed (parser/calendar.py), not stored.
+CREATE TABLE calendar_event (
+    season      TEXT NOT NULL,                 -- fall | spring
+    year        INTEGER NOT NULL,              -- calendar year of the term
+    start_date  TEXT NOT NULL,                 -- ISO date
+    end_date    TEXT NOT NULL,
+    name        TEXT NOT NULL                  -- 'Classes begin', 'Fall final exams', ...
 );
 
 CREATE TABLE subject (

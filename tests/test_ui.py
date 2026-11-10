@@ -63,6 +63,8 @@ def test_app_full_flow_with_sample():
     assert sum(m.label == "Score" for m in at.metric) == 5          # career picks
     assert int(metrics["✅ done"]) > 0                               # audit
     assert any("Advisory only" in i.value for i in at.info)
+    labels = [d.proto.label for d in at.get("download_button")]
+    assert labels == ["📊 Spreadsheet (.csv)", "📅 Calendar (.ics)", "🎓 Profile (.yaml)"]
 
 
 def test_app_bad_input_and_partial_program():
@@ -123,3 +125,9 @@ def test_app_record_semester_and_replan():
     assert any(m.value.startswith("🔁 " + failed) for m in at.markdown)
     assert {m.label: m.value for m in at.metric}["Plan check"] == "Valid ✅"
     assert not any("profile changed" in w.value for w in at.warning)
+
+
+def test_build_profile_overload():
+    st = build_profile(**{**FORM, "overload": True, "overload_hours": 19.0, "overload_terms": 1})
+    assert (st.overload_hours, st.overload_terms) == (19.0, 1)
+    assert build_profile(**{**FORM, "overload": False, "overload_hours": 19.0}).overload_hours == 0

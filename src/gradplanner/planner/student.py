@@ -9,6 +9,8 @@ go into the database. Example:
     next_term: Fall 2026           # first semester to plan
     graduation_term: Spring 2030   # last semester (hard deadline)
     max_hours_per_term: 17
+    overload_hours: 19             # optional: allow semesters above 17 h (needs permission), up to this
+    overload_terms: 2              #   in at most this many semesters
     completed:
       - {course: CSC 111, source: ap}
     in_progress: [CSC 112]         # enrolled this semester; planning assumes they pass
@@ -79,6 +81,12 @@ class StudentProfile:
     career_text: str = ""
     other_programs: list[str] = field(default_factory=list)   # second major and/or minors
     abroad: list[AbroadTerm] = field(default_factory=list)
+    overload_hours: float = 0           # 0 = no overloads; else the most hours in an overloaded semester
+    overload_terms: int = 2             # at most this many overloaded semesters
+
+    def can_overload(self, term: Term) -> bool:
+        """Overloads are for regular on-campus semesters only (not summer, not abroad)."""
+        return self.overload_hours > 0 and term.season != "summer" and self.abroad_in(term) is None
 
     def abroad_in(self, term: Term) -> AbroadTerm | None:
         return next((a for a in self.abroad if a.term == term), None)
@@ -137,6 +145,8 @@ def profile_from_dict(d: dict) -> StudentProfile:
         career_text=d.get("career_text", ""),
         abroad=[AbroadTerm(Term.parse(a["term"]), a.get("program", "wfu"), a.get("location", ""))
                 for a in d.get("abroad") or []],
+        overload_hours=float(d.get("overload_hours") or 0),
+        overload_terms=int(d.get("overload_terms", 2)),
     )
     if p.graduation_term < p.next_term:
         raise ValueError("graduation_term is before next_term")
@@ -166,6 +176,7 @@ def profile_to_dict(p: StudentProfile) -> dict:
                             for o in p.outside_courses],
         "interests": list(p.interests), "career": p.career, "career_text": p.career_text,
         "abroad": [{"term": str(a.term), "program": a.program, "location": a.location} for a in p.abroad],
+        "overload_hours": p.overload_hours, "overload_terms": p.overload_terms,
     })
     return d
 

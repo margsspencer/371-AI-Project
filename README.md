@@ -74,6 +74,13 @@ planned from sophomore spring on for business majors (after admission), except
 the admission prerequisites; non-business students only get them when one of
 their programs requires them, since others need instructor permission.
 
+**Overloads.** "Allow overloads if needed" lets a plan go above 17 hours (the
+Bulletin's limit without permission) up to a chosen cap (18-21) in at most a chosen
+number of semesters (default 19 hours, 2 semesters). The planner overloads only when
+the plan can't fit otherwise, prefers later semesters, never overloads summer or
+abroad, and notes each overload as needing permission. The Bulletin gives no upper
+limit, so the cap is the student's choice.
+
 **Study abroad.** Tick "I plan to study abroad" and pick one or two semesters (junior
 spring by default) and the program type. An abroad semester holds "abroad course"
 slots instead of catalog courses: divisionals, the language requirement, 21st-century
@@ -97,6 +104,20 @@ Prints each semester (courses, core "choose a course" slots, free electives,
 and what each counts toward), notes to check with an advisor, and the result
 of the independent plan check. If no plan fits, it says why. Profiles are
 YAML files with **fake data only**; copy a sample to make a new one.
+
+## Export
+
+```bash
+python scripts/export.py samples/casey_double_major.yaml     # -> exports/casey_example_fictional.csv / .ics
+```
+
+The CSV has one row per planned course or slot (semester, title, hours, what it counts
+toward). The .ics file imports into Google Calendar, Apple Calendar, or Outlook: one
+event per semester listing its courses, plus the add / drop / withdraw deadlines,
+final exams, and Commencement. Dates come from the Bulletin's 2026-27 academic
+calendar; later years are projected onto the same weekdays and marked "(estimated)".
+Summer terms have no published dates, so they're in the CSV but not the calendar.
+The web app has the same downloads under the plan, plus the profile as a YAML file.
 
 ## Re-plan after a semester
 
@@ -157,15 +178,19 @@ reuses cached pages. Use `--refresh` only when the Bulletin changes.
 src/gradplanner/
   config.py       Bulletin year, paths, scraper settings
   scraper/        polite fetcher + list of Bulletin pages
-  parser/         HTML -> courses, prerequisite logic (prereq.py), programs, core rules
+  parser/         HTML -> courses, prerequisite logic (prereq.py), programs, core rules,
+                  academic calendar (calendar.py)
   models.py       Catalog / Course / Program: the data model everything else uses
   pipeline.py     cached pages + overrides -> Catalog
   db/             SQLite schema + save/load
   validation.py   checks that flag data needing a human fix
   planner/        model.py (CP-SAT solver), validate_plan.py (independent check),
-                  precheck.py ("no plan" reasons), student.py (profiles), terms.py
+                  precheck.py ("no plan" reasons), student.py (profiles), terms.py,
+                  replan.py (record a semester, compare plans)
   audit/          audit.py: requirement checklist (works with or without a plan)
   recommender/    tfidf.py (career matching), careers.yaml (pick-list keywords)
+  export/         plan as CSV and as calendar events (.ics)
+  ui/             app.py (Streamlit web app), helpers.py, style.py (theme)
 scripts/          command-line entry points
 samples/          fictional student profiles (YAML)
 tests/            pytest (synthetic fixtures only, no real student data)

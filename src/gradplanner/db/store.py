@@ -8,10 +8,11 @@ from __future__ import annotations
 
 import json
 import sqlite3
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from pathlib import Path
 
 from gradplanner import config
+from gradplanner.parser.calendar import CalendarEvent
 from gradplanner.models import (
     CNF, Catalog, CoreCategory, Course, CourseAtom, DegreeRule, LevelAtom, ManualAtom, Offering,
     Program, ProgramExclusion, RequirementGroup, RequirementItem,
@@ -126,6 +127,9 @@ def save_catalog(catalog: Catalog, path: Path | None = None) -> Path:
         cur.execute("INSERT INTO degree_rule VALUES (?,?,?,?)", (r.key, r.value, r.source_key, r.source_text))
     for code, name in catalog.subjects.items():
         cur.execute("INSERT INTO subject VALUES (?,?)", (code, name))
+    for e in catalog.calendar:
+        cur.execute("INSERT INTO calendar_event VALUES (?,?,?,?,?)",
+                    (e.season, e.year, e.start.isoformat(), e.end.isoformat(), e.name))
     con.commit()
     con.close()
     return path
@@ -191,5 +195,9 @@ def load_catalog(path: Path | None = None) -> Catalog:
                                  rules_note=note, source=source, needs_review=review))
     rules = {k: DegreeRule(k, v, sk, st) for k, v, sk, st in cur.execute("SELECT * FROM degree_rule")}
     subjects = dict(cur.execute("SELECT code, name FROM subject").fetchall())
+    calendar = []
+    if cur.execute("SELECT name FROM sqlite_master WHERE name='calendar_event'").fetchone():
+        calendar = [CalendarEvent(s, y, date.fromisoformat(a), date.fromisoformat(b), n)
+                    for s, y, a, b, n in cur.execute("SELECT * FROM calendar_event ORDER BY start_date")]
     con.close()
-    return Catalog(year, courses, programs, core, rules, exclusions, subjects)
+    return Catalog(year, courses, programs, core, rules, exclusions, subjects, calendar)

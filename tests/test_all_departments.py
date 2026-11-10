@@ -115,6 +115,18 @@ def test_lab_bundle_cross_listing_and_total_row():
     assert prog.problems == []
 
 
+def test_optional_track_table_is_a_note():
+    """Finance, B.S.: the accounting courses for the Master of Science in Accountancy aren't required."""
+    html = page("Finance, B.S.", table([course_row("ACC 212")])
+                + "<p>Finance majors with an interest in pursuing the Master of Science in Accountancy would be "
+                  "required to take the additional accounting coursework listed below:</p>"
+                + table([course_row("ACC 351"), course_row("ACC 352")]))
+    prog = parse_program_page(html, "TST-BS", "fixture")
+    required = [o for g in prog.groups for it in g.items if it.kind != "note" for o in it.options]
+    assert required == ["ACC 212"]
+    assert "ACC 351, ACC 352" in prog.groups[-1].items[0].label
+
+
 def test_choice_list_starting_with_text_row_and_linked_list():
     html = page("Testing, B.S.", table([
         comment_row("Choose two of the following"),

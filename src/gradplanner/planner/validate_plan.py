@@ -40,6 +40,7 @@ def validate_plan(plan: Plan, catalog: Catalog, student: StudentProfile,
 
     # --- each course once, offered, schedulable, prerequisites/corequisites, standing, load
     seen: dict[str, str] = {}
+    overloads: list[str] = []
     have_before: set[str] = set(done)               # courses finished before the current term
     hours_before = sum(catalog.courses[c].credits for c in done) + sum(o.hours for o in student.outside_courses)
     bulletin_max = rule_or(catalog, "max_hours_per_semester", 17)
@@ -76,9 +77,19 @@ def validate_plan(plan: Plan, catalog: Catalog, student: StudentProfile,
                                     f"({needed:g} h); you'd have {hours_before:g} h.")
         limit = student.max_hours(tp.term, bulletin_max)
         if tp.hours > limit:
-            problems.append(f"{tp.term}: {tp.hours:g} hours is over the limit of {limit:g}.")
+            if not student.can_overload(tp.term):
+                problems.append(f"{tp.term}: {tp.hours:g} hours is over the limit of {limit:g}.")
+            elif tp.hours > student.overload_hours:
+                problems.append(f"{tp.term}: {tp.hours:g} hours is over the overload limit of "
+                                f"{student.overload_hours:g}.")
+            else:
+                overloads.append(str(tp.term))
         have_before |= this_term
         hours_before += tp.hours
+
+    if len(overloads) > student.overload_terms:
+        problems.append(f"{len(overloads)} overloaded semesters ({', '.join(overloads)}); "
+                        f"at most {student.overload_terms} allowed.")
 
     everything = set(have_before)                  # completed + all planned courses
     for cid in everything:
