@@ -24,7 +24,7 @@ Each plan takes up to about 10 seconds to solve. Use that time to talk (the line
 > Planning four years at Wake means juggling prerequisites, which semesters courses
 > run, major and minor rules, the core curriculum, hour limits, and study abroad.
 > Our planner reads all of that from the 2026-27 Bulletin and builds a plan that
-> provably follows the rules. It's advisory only: the gold box on top says so.
+> provably follows the rules. It's advisory only: the box at the top says so.
 
 Point at the **Advisory only** box.
 

@@ -39,7 +39,7 @@ TERM_COLUMNS = {"Course": st.column_config.TextColumn(width="small"),
                 "Counts toward": st.column_config.TextColumn(width="medium")}
 PLAN_STATUS = {"optimal": "Best plan found", "feasible": "Good plan (time ran out before proving it's the best)"}
 
-st.set_page_config(page_title="WFU Graduation Planner", page_icon="🎓", layout="wide")
+st.set_page_config(page_title="Graduation Planner", page_icon="🎓", layout="wide")
 st.markdown(CSS, unsafe_allow_html=True)
 
 

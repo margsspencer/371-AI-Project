@@ -1,10 +1,11 @@
-# Black and gold theme: muted gold page, black text, black sidebar (Wake Forest colors; no logos or marks).
+# Light theme: warm off-white page, white cards, dark text, gold as an accent only
+# (Wake Forest colors; no logos or marks).
 [theme]
 base = "light"
-primaryColor = "#141414"              # black: buttons, selected tabs, checkboxes, focus rings
-backgroundColor = "#D8C795"           # muted gold page
-secondaryBackgroundColor = "#E8DCB8"  # lighter gold: inputs, tables, chips
-textColor = "#111111"                 # black text
+primaryColor = "#8A6A22"              # deep gold: buttons, selected tabs, checkboxes, focus rings
+backgroundColor = "#FAF8F3"           # warm off-white page
+secondaryBackgroundColor = "#F1ECE0"  # light sand: inputs, tables, chips, sidebar
+textColor = "#1F1F1F"                 # near-black text
 font = "sans serif"
 
 [client]
