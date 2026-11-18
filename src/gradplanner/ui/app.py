@@ -23,6 +23,8 @@ import yaml
 from gradplanner import config
 from gradplanner.db.store import default_db_path, load_catalog
 from gradplanner.planner import load_profile
+from gradplanner.planner.ap import ap_awards, exam_names
+from gradplanner.planner.student import ApExam
 from gradplanner.planner.requirements import LANGUAGE_DONE, load_settings, program_problems, rule_or
 from gradplanner.planner.terms import Term
 from gradplanner.recommender import Recommender, load_careers
@@ -68,7 +70,7 @@ def recommender():
 BLANK = {"name": "New Student (fictional)", "majors": ["CSC-BS"], "minors": [], "entry": "Fall 2026", "next_term": "Fall 2026",
          "graduation": "Spring 2030", "max_hours": 17.0, "summer": False, "language_needed": 1,
          "language": "", "language_placement": "",
-         "completed": [], "ap_credit": [], "in_progress": [], "outside": [], "interests": [],
+         "completed": [], "ap_credit": [], "in_progress": [], "outside": [], "interests": [], "ap_exams": [],
          "career": "", "career_text": "", "abroad": False, "abroad_terms": [], "abroad_program": "wfu",
          "abroad_location": "", "overload": False, "overload_hours": 19.0, "overload_terms": 2}
 ABROAD_PROGRAMS = {"wfu": "Wake Forest program (e.g. Worrell House, Casa Artom, Flow House)",
@@ -80,8 +82,11 @@ def load_form(values: dict, keep_result: bool = False) -> None:
         st.session_state[f"f_{k}"] = v
     st.session_state.outside_df = pd.DataFrame(values["outside"] or [], columns=["name", "hours", "counts_for"])
     st.session_state.pop("outside_editor", None)      # old table edits would apply to the new rows
+    st.session_state.ap_df = pd.DataFrame(values.get("ap_exams") or [], columns=["exam", "score"])
+    st.session_state.pop("ap_editor", None)
     if not keep_result:
         st.session_state.pop("result", None)
+        st.session_state.pop("needs_room", None)
 
 
 def sample_files() -> dict[str, str]:
@@ -114,21 +119,26 @@ def sidebar(cat) -> dict | None:
     sb.selectbox("Graduate by", terms, key="f_graduation")
     sb.number_input("Max hours / semester", 12.0, 17.0, step=1.0, format="%.0f", key="f_max_hours",
                     help="The Bulletin allows up to 17 hours without special permission.")
-    sb.checkbox("Allow summer courses", key="f_summer")
-    if sb.checkbox("Allow overloads if needed", key="f_overload",
-                   help="More than 17 hours in a semester needs permission (Bulletin). The planner overloads "
-                        "only when the plan can't fit otherwise, and never in summer or abroad."):
-        c1, c2 = sb.columns(2)
-        c1.number_input("Up to (hours)", 18.0, 21.0, step=1.0, format="%.0f", key="f_overload_hours")
-        c2.number_input("In at most (semesters)", 1, 4, key="f_overload_terms")
+    # Summer courses and overloads only appear when a plan didn't fit (or the profile already uses them).
+    if st.session_state.get("needs_room") or st.session_state.get("f_summer") or st.session_state.get("f_overload"):
+        sb.caption("Your plan didn't fit in regular semesters. These can make room:")
+        sb.checkbox("Allow summer courses", key="f_summer")
+        if sb.checkbox("Allow overloads if needed", key="f_overload",
+                       help="More than 17 hours in a semester needs permission (Bulletin). The planner "
+                            "overloads only when the plan can't fit otherwise, and never in summer or abroad."):
+            c1, c2 = sb.columns(2)
+            c1.number_input("Up to (hours)", 18.0, 21.0, step=1.0, format="%.0f", key="f_overload_hours")
+            c2.number_input("In at most (semesters)", 1, 4, key="f_overload_terms")
 
-    language_section(sb, cat)
+    ap = ap_section(sb)
+    language_section(sb, cat, ap)
 
     sb.subheader("Courses")
     fmt = lambda c: course_label(cat, c)          # noqa: E731
     sb.multiselect("Completed at Wake Forest", courses, format_func=fmt, key="f_completed")
-    sb.multiselect("AP / transfer credit", courses, format_func=fmt, key="f_ap_credit",
-                   help="AP and transfer credit can't count for divisional or 21st-century core requirements.")
+    sb.multiselect("Other AP / transfer credit (by course)", courses, format_func=fmt, key="f_ap_credit",
+                   help="Course credit not covered by the AP exams table, e.g. transfer courses. AP and "
+                        "transfer credit can't count for divisional or 21st-century core requirements.")
     sb.multiselect("In progress this semester", courses, format_func=fmt, key="f_in_progress",
                    help="The plan assumes you pass these.")
     sb.caption("Other finished courses (core classes, electives) and what they count for:")
@@ -160,12 +170,38 @@ def sidebar(cat) -> dict | None:
                  format_func=lambda c: careers[c].label if c else "(none)")
     sb.text_input("In your own words (optional)", key="f_career_text", placeholder="e.g. AI for healthcare")
 
-    form = {k[2:]: st.session_state[k] for k in st.session_state if k.startswith("f_")}
+    # Hidden widgets (e.g. "Language courses left" once a language is chosen) lose their state,
+    # so start from the blank form's values.
+    form = {**BLANK, **{k[2:]: st.session_state[k] for k in st.session_state if k.startswith("f_")}}
     form["outside"] = outside.to_dict("records")
+    form["ap_exams"] = ap
     return form
 
 
-def language_section(sb, cat) -> None:
+def ap_section(sb) -> list[dict]:
+    """AP exams and scores; shows the credit they earn under the Wake Forest AP policy."""
+    sb.subheader("AP exams")
+    if "ap_df" not in st.session_state:
+        st.session_state.ap_df = pd.DataFrame([], columns=["exam", "score"])
+    table = sb.data_editor(
+        st.session_state.ap_df, num_rows="dynamic", use_container_width=True, key="ap_editor",
+        column_config={"exam": st.column_config.SelectboxColumn("Exam", options=exam_names(), width="medium"),
+                       "score": st.column_config.SelectboxColumn("Score", options=[1, 2, 3, 4, 5], width="small")})
+    rows = [{"exam": r["exam"], "score": int(r["score"])} for r in table.to_dict("records")
+            if r.get("exam") and r.get("score") == r.get("score") and r.get("score") is not None]
+    awards, notes = ap_awards([ApExam(r["exam"], r["score"]) for r in rows])
+    for a in awards:
+        credit = ", ".join(f"{c} ({h:g} h)" for c, h in a.courses) or "placement only"
+        sb.caption(f"✓ AP {a.exam} ({a.score}): {credit}")
+    for n in notes:
+        sb.caption(f"• {n}")
+    if rows:
+        sb.caption("Wake Forest AP policy 2025-26: AP credit counts toward the 120 hours and prerequisites, "
+                   "but not divisional requirements.")
+    return rows
+
+
+def language_section(sb, cat, ap: list[dict]) -> None:
     """Foreign language: the language and the placement test result decide which courses are planned."""
     langs = settings().languages
     sb.subheader("Language")
@@ -173,6 +209,12 @@ def language_section(sb, cat) -> None:
                         format_func=lambda s: langs[s].name if s else "Not chosen yet / other",
                         help="Wake Forest requires one 200-level foreign language course. The placement test "
                              "you take before your first semester decides where you start (1–4 semesters).")
+    awards, _ = ap_awards([ApExam(r["exam"], r["score"]) for r in ap])
+    for a in awards:
+        for subj, start in a.language.items():
+            if subj in langs and lang in ("", subj):
+                where = "requirement done" if start == LANGUAGE_DONE else f"start at {start} or later"
+                sb.caption(f"From AP {a.exam}: {langs[subj].name}, {where}.")
     if not lang:
         sb.number_input("Language courses left", 0, 4, key="f_language_needed",
                         help="Courses still needed to finish one 200-level course (0 = done or exempt). "
@@ -202,7 +244,8 @@ def show_plan(cat, res) -> None:
         st.error("No plan fits these settings.")
         for why in plan.explanations:
             st.markdown(f"- {why}")
-        st.info("Try a later graduation semester, a higher hour limit, or allowing summer courses.")
+        st.info("Try a later graduation semester or a higher hour limit. Options for summer courses and "
+                "overloads are now in the sidebar, under **Max hours / semester**.")
         return
     total = sum(tp.hours for tp in plan.terms)
     c1, c2, c3 = st.columns(3)
@@ -384,6 +427,9 @@ def main() -> None:
                 st.session_state.result = run_all(cat, student, recommender(),
                                                   previous=res.plan if keep and res else None)
                 st.session_state.result_form = repr(form)
+            if not st.session_state.result.plan.ok and not st.session_state.get("needs_room"):
+                st.session_state.needs_room = True
+                st.rerun()                          # redraw the sidebar with the summer / overload options
 
     res = st.session_state.get("result")
     if res is None:

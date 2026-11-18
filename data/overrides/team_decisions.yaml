@@ -111,12 +111,12 @@ language_sequences:
   SPA: {name: Spanish, courses: [SPA 101, SPA 102, SPA 201, SPA 202]}
   FRH: {name: French, courses: [FRH 111, FRH 112, FRH 153, FRH 212]}
   ITA: {name: Italian, courses: [ITA 111, ITA 112, ITA 153, ITA 212]}
-  GER: {name: German, courses: [GER 111, GER 112, GER 153, GER 210]}
-  RUS: {name: Russian, courses: [RUS 111, RUS 112, RUS 153, RUS 210]}
+  GER: {name: German, courses: [GER 111, GER 112, GER 153, GER 212]}
+  RUS: {name: Russian, courses: [RUS 111, RUS 112, RUS 153, RUS 212]}
   ARB: {name: Arabic, courses: [ARB 111, ARB 112, ARB 153, ARB 201]}
   HNU: {name: Hindi-Urdu, courses: [HNU 111, HNU 112, HNU 153, HNU 201]}
   CHI: {name: Chinese, courses: [CHI 101, CHI 102, CHI 153, CHI 201]}
   JPN: {name: Japanese, courses: [JPN 101, JPN 102, JPN 153, JPN 201]}
-  NLL: {name: Hebrew, courses: [NLL 111, NLL 112, NLL 153, NLL 211]}
-  LAT: {name: Latin, courses: [LAT 113, LAT 153, LAT 211]}
+  NLL: {name: Hebrew, courses: [NLL 111, NLL 112, NLL 153, NLL 212]}
+  LAT: {name: Latin, courses: [LAT 113, LAT 153, LAT 212]}
   GRK: {name: Greek, courses: [GRK 113, GRK 153, GRK 211]}

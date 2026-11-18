@@ -73,8 +73,13 @@ Major pairs the Bulletin forbids, such as Biology with Neuroscience, are refused
 planned from sophomore spring on for business majors (after admission), except
 the admission prerequisites; non-business students only get them when one of
 their programs requires them, since others need instructor permission.
+A department's courses are spaced out: the planner avoids more than two courses
+from one department (say BEM) in a semester, unless the plan can't fit otherwise
+(a preference, not a rule; labs don't count).
 
-**Overloads.** "Allow overloads if needed" lets a plan go above 17 hours (the
+**Overloads and summer.** These options stay hidden until a plan doesn't fit in
+regular semesters; then "Allow summer courses" and "Allow overloads if needed" appear
+in the sidebar. "Allow overloads if needed" lets a plan go above 17 hours (the
 Bulletin's limit without permission) up to a chosen cap (18-21) in at most a chosen
 number of semesters (default 19 hours, 2 semesters). The planner overloads only when
 the plan can't fit otherwise, prefers later semesters, never overloads summer or
@@ -84,12 +89,25 @@ limit, so the cap is the student's choice.
 **Foreign language.** Wake Forest requires one 200-level foreign language course.
 Pick the language and the placement test result (where the student starts); the
 planner schedules the real courses from there, one per semester, back to back and
-from the first year when possible: 1-4 courses, e.g. SPA 101 → 102 → 201 → 202.
+from the first year when possible: 1-4 courses, usually 111 → 112 → 153 → 212
+(French, Italian, German, Russian, Hebrew). Languages the 2026-27 Bulletin numbers
+differently keep its numbers: Spanish SPA 101 → 102 → 201 → 202, Chinese and Japanese
+101 → 102 → 153 → 201, Arabic and Hindi-Urdu end at 201, Latin and Greek start at 113.
 Courses below the placement level count as prerequisites met. Sequences for 12
 languages are in `data/overrides/team_decisions.yaml` (Spanish ends at SPA 202
 because the Bulletin says SPA 201 "does not fulfill the foreign language
 requirement"). "Not chosen yet / other" keeps the old behavior: a number of generic
 "Foreign language" slots.
+
+**AP exams.** Enter each AP exam and score in the "AP exams" table. Credit follows
+Wake Forest's AP Policy 2025-26 (`data/overrides/ap_credit.yaml`): e.g. Calculus BC 4-5
+= MTH 112 (4 h) + MTH 111 (0 h), Computer Science A 4-5 = CSC 111. AP credit counts as
+finished courses for prerequisites, major/minor requirements, and the 120 hours, and
+language exams set the language placement (AP Chinese 4 = start at CHI 201). Per the
+policy, AP credit never satisfies divisional requirements; the one exception ("credit
+for 2 AP courses ... any 200 or 300 level course" for the divisional) is applied per
+department, which is our reading of it. SPA 154 and SPA 212 (old course numbers) become
+outside credit with the same hours.
 
 **Study abroad.** Tick "I plan to study abroad" and pick one or two semesters (junior
 spring by default) and the program type. An abroad semester holds "abroad course"

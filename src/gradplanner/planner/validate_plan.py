@@ -12,6 +12,7 @@ from __future__ import annotations
 
 from gradplanner.models import Catalog
 from gradplanner.parser.prereq import cnf_satisfied, cnf_to_text, unmet_clauses
+from gradplanner.planner.ap import ap_divisional_subjects
 from gradplanner.planner.plan import Plan
 from gradplanner.planner.precheck import unplannable_needs
 from gradplanner.planner.requirements import (
@@ -43,7 +44,8 @@ def validate_plan(plan: Plan, catalog: Catalog, student: StudentProfile,
     overloads: list[str] = []
     lang, placed = language_courses(student, settings)
     have_before: set[str] = set(done) | placed      # finished before the current term (placement counts)
-    hours_before = sum(catalog.courses[c].credits for c in done) + sum(o.hours for o in student.outside_courses)
+    done_hours = student.course_hours(catalog)
+    hours_before = sum(done_hours.values()) + sum(o.hours for o in student.outside_courses)
     bulletin_max = rule_or(catalog, "max_hours_per_semester", 17)
     for tp in plan.terms:
         problems += _abroad_term(tp, student, settings)
@@ -55,6 +57,8 @@ def validate_plan(plan: Plan, catalog: Catalog, student: StudentProfile,
                 continue
             if cid in done:
                 problems.append(f"{tp.term}: {cid} is already completed.")
+            if cid in placed and cid not in done:
+                problems.append(f"{tp.term}: {cid} is below your language placement (no credit).")
             if cid in seen:
                 problems.append(f"{tp.term}: {cid} is also planned in {seen[cid]}.")
             seen[cid] = str(tp.term)
@@ -150,7 +154,8 @@ def validate_plan(plan: Plan, catalog: Catalog, student: StudentProfile,
             continue                                   # checked below as a course sequence
         courses = counts.get(need.id, [])
         for cid in courses:
-            if not course_counts_for_core(catalog.courses[cid], need, catalog, settings, done.get(cid, "wfu")):
+            if not course_counts_for_core(catalog.courses[cid], need, catalog, settings, done.get(cid, "wfu"),
+                                          ap_divisional_subjects(student)):
                 problems.append(f"{cid} can't count toward {need.category.name}.")
             per_course_kind[(cid, need.kind)] = per_course_kind.get((cid, need.kind), 0) + 1
         if need.kind == "division" and need.count > 1:
@@ -184,7 +189,7 @@ def validate_plan(plan: Plan, catalog: Catalog, student: StudentProfile,
             problems.append(f"{when[cid]}: {cid} must come in a later semester than {lang[i - 1]}.")
 
     # --- 120 hours
-    earned = (sum(catalog.courses[c].credits for c in done) + sum(o.hours for o in student.outside_courses)
+    earned = (sum(done_hours.values()) + sum(o.hours for o in student.outside_courses)
               + sum(tp.hours for tp in plan.terms))
     total = rule_or(catalog, "total_hours", 120)
     if earned < total:
@@ -269,8 +274,8 @@ def _abroad_limits(plan: Plan, catalog: Catalog, student: StudentProfile, settin
             kind = "affiliate-program " if affiliate else ""
             out.append(f"{hours:g} {kind}abroad hours count toward {catalog.programs[pid].name}; the limit is {cap:g}.")
     if affiliate_hours:
-        earned = (sum(catalog.courses[c.course].credits for c in student.finished
-                      if c.source != "wfu" and c.course in catalog.courses)
+        hours = student.course_hours(catalog)
+        earned = (sum(hours[c.course] for c in student.finished if c.source != "wfu" and c.course in hours)
                   + sum(o.hours for o in student.outside_courses if o.source != "wfu"))
         limit = rule_or(catalog, "max_outside_hours", 30)
         if earned + affiliate_hours > limit:

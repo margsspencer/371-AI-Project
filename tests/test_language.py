@@ -114,3 +114,23 @@ def test_real_sam_spanish(real):
     assert plan.ok and validate_plan(plan, real, st) == []
     when = {cid: tp.term for tp in plan.terms for cid in tp.course_ids}
     assert when["SPA 201"] < when["SPA 202"] and "SPA 101" not in when
+
+
+def test_real_no_course_below_the_placement(real):
+    """Placed into CHI 153: CHI 101/102 earn no credit (Bulletin), so the planner must not add them."""
+    from gradplanner.planner.student import StudentProfile
+    st = StudentProfile("Test (fictional)", "CSC-BS", Term("fall", 2026), Term("fall", 2026), Term("spring", 2030),
+                        language="CHI", language_placement="CHI 153")
+    plan = plan_for_student(real, st)
+    chinese = [c for tp in plan.terms for c in tp.course_ids if c.startswith("CHI")]
+    assert chinese == ["CHI 153", "CHI 201"] and validate_plan(plan, real, st) == []
+
+
+def test_real_app_plans_with_a_language_chosen(real):
+    """Choosing a language hides 'Language courses left'; making a plan used to crash."""
+    from streamlit.testing.v1 import AppTest
+    at = AppTest.from_file("src/gradplanner/ui/app.py", default_timeout=120).run()
+    next(s for s in at.sidebar.selectbox if s.label == "Language").select("SPA").run()
+    next(s for s in at.sidebar.selectbox if s.label.startswith("Placement")).select("SPA 201").run()
+    next(b for b in at.button if b.label == "Make my plan").click().run()
+    assert not at.exception and not at.error

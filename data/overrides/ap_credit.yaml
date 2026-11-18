@@ -1,0 +1,112 @@
+# AP exam credit, from Wake Forest's "Advanced Placement Policy 2025-26" (updated June 12, 2025):
+# https://prod.wp.cdn.aws.wfu.edu/sites/120/2025/06/Advanced-Placement-Policy-2025-26.pdf
+#
+# Each exam lists score bands. A band gives course credit (hours as in the policy; 0 hours means
+# the course counts as done for prerequisites and requirements but adds no hours) and, for
+# languages, where the student starts in the language sequence (`language: {SUBJ: start course}`,
+# or `done`). Courses missing from the 2026-27 catalog (SPA 154, SPA 212: old numbers) become
+# outside credit with the same hours.
+#
+# Policy: "Students entering in or after Fall 2007 cannot use Advanced Placement courses to
+# satisfy WFU divisional requirements; however, AP credit will count towards the 120 hours."
+source: "WFU Advanced Placement Policy 2025-26 (June 12, 2025)"
+
+exams:
+  Art History:
+    - {scores: [4, 5], credit: [[ART 103, 3]]}
+  "Studio Art: Drawing":
+    - {scores: [3, 4, 5], credit: [[ART 118, 3]]}
+  "Studio Art: 2D Design":
+    - {scores: [3, 4, 5], credit: [[ART 111, 3]]}
+  "Studio Art: 3D Design":
+    - {scores: [3, 4, 5], credit: [[ART 111, 3]]}
+  Biology:
+    - {scores: [4, 5], credit: [[BIO 111, 4]]}
+  Chemistry:
+    - {scores: [4, 5], credit: [[CHM 111, 3], [CHM 111L, 1], [CHM 280, 3]]}
+  Chinese Language and Culture:
+    - {scores: [3], credit: [[CHI 102, 0]], language: {CHI: CHI 153}}
+    - {scores: [4], credit: [[CHI 153, 4]], language: {CHI: CHI 201}}
+    - {scores: [5], credit: [[CHI 201, 4]], language: {CHI: done}}
+  Computer Science A:
+    - {scores: [4, 5], credit: [[CSC 111, 4]]}
+  Computer Science Principles:
+    - {scores: [4, 5], credit: [[CSC 101, 3]]}
+  "Economics: Microeconomics":
+    - {scores: [], credit: []}           # credit only for the combined score below
+  "Economics: Macroeconomics":
+    - {scores: [], credit: []}
+  Human Geography:
+    - {scores: [4, 5], credit: [[EDU 271, 3]]}
+  French Language and Culture:
+    - {scores: [3], credit: [[FRH 154, 0]], language: {FRH: FRH 212}}
+    - {scores: [4, 5], credit: [[FRH 154, 3]], language: {FRH: FRH 212}}
+  German Language and Culture:
+    - {scores: [3], credit: [[GER 153, 0]], language: {GER: GER 212}}
+    - {scores: [4], credit: [[GER 153, 4]], language: {GER: GER 212}}
+    - {scores: [5], credit: [[GER 210, 4], [GER 212, 4]], language: {GER: done},
+       note: "AP German 5 gives GER 212 credit; to take GER 212 at Wake Forest, petition the department to change it to GER 210 or 214."}
+  European History:
+    - {scores: [4, 5], credit: [[HST 102, 3]]}
+  United States History:
+    - {scores: [4, 5], credit: [[HST 150, 3]]}
+  World History:
+    - {scores: [4, 5], credit: [[HST 103, 3]]}
+  Italian Language and Culture:
+    - {scores: [3], credit: [[ITA 154, 0]], language: {ITA: ITA 212}}
+    - {scores: [4, 5], credit: [[ITA 154, 3]], language: {ITA: ITA 212}}
+  Japanese Language and Culture:
+    - {scores: [3], credit: [[JPN 102, 0]], language: {JPN: JPN 153}}
+    - {scores: [4], credit: [[JPN 153, 4]], language: {JPN: JPN 201}}
+    - {scores: [5], credit: [[JPN 201, 4]], language: {JPN: done}}
+  Latin:
+    - {scores: [3], credit: [[LAT 113, 0]], language: {LAT: LAT 153}}
+    - {scores: [4], credit: [[LAT 153, 0]], language: {LAT: LAT 212}}
+    - {scores: [5], credit: [[LAT 211, 0]], language: {LAT: done}}
+  Calculus AB:
+    - {scores: [4, 5], credit: [[MTH 111, 4]]}
+  Calculus AB subscore (from Calculus BC):
+    - {scores: [4, 5], credit: [[MTH 111, 4]]}
+  Calculus BC:
+    - {scores: [3], credit: [[MTH 111, 4]]}
+    - {scores: [4, 5], credit: [[MTH 112, 4], [MTH 111, 0]]}
+  Music Theory:
+    - {scores: [5], credit: [[MSC 131, 4]]}
+  Physics 1:
+    - {scores: [4, 5], credit: [[PHY 110, 4], [PHY 110L, 0]]}
+  Physics 2:
+    - {scores: [4, 5], credit: [[PHY 111, 4]], note: "Credit is given for PHY 111 or PHY 113, not both."}
+  "Physics C: Mechanics":
+    - {scores: [4, 5], credit: [[PHY 113, 4], [PHY 113L, 0]], note: "Credit is given for PHY 111 or PHY 113, not both."}
+  "Physics C: Electricity and Magnetism":
+    - {scores: [4, 5], credit: [[PHY 114, 4], [PHY 114L, 0]]}
+  "Government and Politics: United States":
+    - {scores: [5], credit: [[POL 113, 3]]}
+  "Government and Politics: Comparative":
+    - {scores: [5], credit: [[POL 114, 3]]}
+  Psychology:
+    - {scores: [4, 5], credit: [[PSY 151, 3]]}
+  Spanish Language and Culture:
+    - {scores: [3], credit: [[SPA 154, 0]], language: {SPA: SPA 202},
+       note: "AP Spanish Language also qualifies you for SPA 203 instead of SPA 202."}
+    - {scores: [4, 5], credit: [[SPA 154, 3]], language: {SPA: SPA 202},
+       note: "AP Spanish Language also qualifies you for SPA 203 instead of SPA 202."}
+  Spanish Literature and Culture:
+    - {scores: [3], credit: [[SPA 212, 3]], language: {SPA: done}}
+    - {scores: [4, 5], credit: [[SPA 280, 3]], language: {SPA: done}}
+  Statistics:
+    - {scores: [4, 5], credit: [[STA 111, 4]],
+       note: "With a 4 on AP Statistics, STA 111 credit is given only after passing STA 112 at Wake Forest with a C or better."}
+
+# Both Economics exams, combined score 8-10: ECN 150.
+combined:
+  - {exams: ["Economics: Microeconomics", "Economics: Macroeconomics"], min_total: 8, credit: [[ECN 150, 3]]}
+
+# "Students who have received credit for 2 AP courses may elect to fulfill their college divisional
+# with any 200 or 300 level course (excluding 390-392, 395, 398, 399)." Team reading (confirm with
+# an advisor): with AP credit for two courses in a department, any 200/300-level course in that
+# department counts toward its division.
+divisional_after_two:
+  min_courses: 2
+  levels: [200, 399]
+  excluded_numbers: ["390", "391", "392", "395", "398", "399"]

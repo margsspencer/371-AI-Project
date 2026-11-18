@@ -310,13 +310,20 @@ def division_subjects(category: CoreCategory, settings: PlannerSettings) -> set[
 
 
 def course_counts_for_core(course: Course, need: CoreNeed, catalog: Catalog, settings: PlannerSettings,
-                           source: str = "wfu") -> bool:
-    """Can this course count toward this core category? (AP/transfer never count for divisional or 21CS.)"""
+                           source: str = "wfu", ap_subjects: set[str] = frozenset()) -> bool:
+    """Can this course count toward this core category? (AP/transfer never count for divisional or 21CS.)
+
+    `ap_subjects`: subjects where the student has AP credit for two courses; there any 200/300-level
+    course counts toward the division (AP policy; see planner/ap.py)."""
     tag = need.category.tag
     if need.kind == "division":
-        return (source == "wfu" and "D" in course.tags
-                and course.subject in division_subjects(need.category, settings)
-                and course.credits >= rule_or(catalog, "min_hours_for_core_course", 3))
+        if not (source == "wfu" and course.subject in division_subjects(need.category, settings)
+                and course.credits >= rule_or(catalog, "min_hours_for_core_course", 3)):
+            return False
+        if "D" in course.tags:
+            return True
+        from gradplanner.planner.ap import ap_divisional_ok
+        return course.subject in ap_subjects and ap_divisional_ok(course.number, course.level)
     if need.kind == "21cs":
         return source == "wfu" and tag in course.tags
     if need.kind == "tag":

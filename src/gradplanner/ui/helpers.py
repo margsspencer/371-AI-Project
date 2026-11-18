@@ -10,7 +10,8 @@ from gradplanner.planner import StudentProfile, plan_for_student, validate_plan
 from gradplanner.planner.plan import Plan
 from gradplanner.planner.replan import PlanDiff, diff_plans, record_term
 from gradplanner.planner.requirements import PlannerSettings
-from gradplanner.planner.student import AbroadTerm, CompletedCourse, OutsideCourse
+from gradplanner.planner.ap import apply_ap
+from gradplanner.planner.student import AbroadTerm, ApExam, CompletedCourse, OutsideCourse
 from gradplanner.planner.terms import Term
 from gradplanner.recommender import Recommender, career_query
 from gradplanner.recommender.tfidf import Recommendation, business_skip
@@ -57,7 +58,8 @@ def build_profile(*, name: str, majors: list[str], minors: list[str], entry: str
                   interests: list[str], career: str | None, career_text: str, abroad: bool = False,
                   abroad_terms: list[str] = (), abroad_program: str = "wfu",
                   abroad_location: str = "", overload: bool = False, overload_hours: float = 19,
-                  overload_terms: int = 2, language: str = "", language_placement: str = "") -> StudentProfile:
+                  overload_terms: int = 2, language: str = "", language_placement: str = "",
+                  ap_exams: list[dict] = ()) -> StudentProfile:
     """A profile from the sidebar form. Raises ValueError with a readable message on bad input."""
     if not majors:
         raise ValueError("Choose at least one major.")
@@ -80,7 +82,12 @@ def build_profile(*, name: str, majors: list[str], minors: list[str], entry: str
         if not nm or hours in (None, "") or hours != hours:     # skip empty / NaN rows
             continue
         rows.append(OutsideCourse(nm, float(hours), r.get("counts_for") or None, r.get("source") or "wfu"))
-    return StudentProfile(
+    exams = []
+    for r in ap_exams:
+        score = r.get("score")
+        if r.get("exam") and score is not None and score == score:      # skip empty / NaN rows
+            exams.append(ApExam(str(r["exam"]), int(score)))
+    return apply_ap(StudentProfile(
         name=name.strip() or "Student (fictional)", program=majors[0],
         other_programs=list(majors[1:]) + list(minors), entry_term=entry_t, next_term=next_t,
         graduation_term=grad_t, max_hours_per_term=max_hours, include_summer=summer,
@@ -89,7 +96,8 @@ def build_profile(*, name: str, majors: list[str], minors: list[str], entry: str
         outside_courses=rows, interests=list(interests), career=career or None, career_text=career_text.strip(),
         abroad=[AbroadTerm(Term.parse(t), abroad_program, abroad_location.strip())
                 for t in (abroad_terms if abroad else [])],
-        overload_hours=float(overload_hours) if overload else 0, overload_terms=int(overload_terms))
+        overload_hours=float(overload_hours) if overload else 0, overload_terms=int(overload_terms),
+        ap_exams=exams))
 
 
 def profile_to_form(st: StudentProfile, catalog: Catalog) -> dict:
@@ -102,10 +110,11 @@ def profile_to_form(st: StudentProfile, catalog: Catalog) -> dict:
         "summer": st.include_summer, "language_needed": st.language_courses_needed,
         "language": st.language or "", "language_placement": st.language_placement or "",
         "completed": [c.course for c in st.completed if c.source == "wfu"],
-        "ap_credit": [c.course for c in st.completed if c.source != "wfu"],
+        "ap_credit": [c.course for c in st.completed if c.source != "wfu" and not c.from_exam],
+        "ap_exams": [{"exam": a.exam, "score": a.score} for a in st.ap_exams],
         "in_progress": list(st.in_progress),
         "outside": [{"name": o.name, "hours": o.hours, "counts_for": o.counts_for or ""}
-                    for o in st.outside_courses],
+                    for o in st.outside_courses if not o.from_exam],
         "interests": list(st.interests), "career": st.career or "", "career_text": st.career_text,
         "abroad": bool(st.abroad), "abroad_terms": [str(a.term) for a in st.abroad],
         "abroad_program": st.abroad[0].program if st.abroad else "wfu",

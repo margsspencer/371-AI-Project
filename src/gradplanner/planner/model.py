@@ -58,6 +58,7 @@ from dataclasses import dataclass
 from ortools.sat.python import cp_model
 
 from gradplanner.models import Catalog, Course, CourseAtom, LevelAtom
+from gradplanner.planner.ap import ap_divisional_subjects, ap_notes
 from gradplanner.planner.plan import Plan, PlanItem, TermPlan
 from gradplanner.planner.precheck import precheck, unplannable_needs
 from gradplanner.planner.requirements import (
@@ -192,10 +193,12 @@ class _Builder:
                 plan.notes.append(f"{c.course} is not in our catalog; list it under outside_courses instead.")
         if self.st.in_progress:
             plan.notes.append("Assumes you pass your current courses: " + ", ".join(self.st.in_progress) + ".")
-        self.done_hours = (sum(self.cat.courses[c].credits for c in self.done)
+        self.done_hours = (sum(self.st.course_hours(self.cat).values())
                            + sum(o.hours for o in self.st.outside_courses))
 
         self.admission = admission_courses(self.cat)
+        self.ap_subjects = ap_divisional_subjects(self.st)
+        plan.notes += ap_notes(self.st)
         # Foreign language: the courses still needed from the placement level, in order.
         self.lang, self.placed = language_courses(self.st, ctx.settings)
         seq = language_sequence(self.st, ctx.settings)
@@ -205,7 +208,8 @@ class _Builder:
                               for p in self.programs))
         for cid in seeds:
             course = self.cat.courses[cid]
-            if cid not in self.done and schedulable_reason(course) is None:
+            # Below the language placement: no credit (Bulletin), so never planned.
+            if cid not in self.done and cid not in self.placed and schedulable_reason(course) is None:
                 self.candidates[cid] = course
 
         self.take: dict[str, dict[int, cp_model.IntVar]] = {}
@@ -295,8 +299,8 @@ class _Builder:
         # Transfer-credit limit: AP/transfer already earned + affiliate abroad hours.
         affiliate = [self.load[ti] for ti, a in self.abroad.items() if a.program == "affiliate"]
         if affiliate:
-            earned = (sum(self.cat.courses[c.course].credits for c in self.st.finished
-                          if c.source != "wfu" and c.course in self.cat.courses)
+            hours = self.st.course_hours(self.cat)
+            earned = (sum(hours[c.course] for c in self.st.finished if c.source != "wfu" and c.course in hours)
                       + sum(o.hours for o in self.st.outside_courses if o.source != "wfu"))
             limit = rule_or(self.cat, "max_outside_hours", 30)
             self.m.add(h(earned) + sum(affiliate) <= h(limit)).only_enforce_if(self.sw["abroad"])
@@ -425,7 +429,7 @@ class _Builder:
             if need.kind != "slot":
                 for cid in list(self.done) + list(self.take):
                     if course_counts_for_core(self.cat.courses[cid], need, self.cat, self.ctx.settings,
-                                              self.done.get(cid, "wfu")):
+                                              self.done.get(cid, "wfu"), self.ap_subjects):
                         v = self.m.new_bool_var(f"cov[{cid},{need.id}]")
                         self.cov[(cid, need.id)] = v
                         covered.append(v)
@@ -503,7 +507,31 @@ class _Builder:
         pos = {c: sum(ti * v for ti, v in self.take[c].items()) for c in self.lang if c in self.take}
         obj += [150 * p for p in pos.values()]
         obj += [300 * (pos[b] - pos[a]) for a, b in zip(self.lang, self.lang[1:]) if a in pos and b in pos]
+        obj += self._spread()
         self.m.minimize(sum(obj))
+
+    SAME_SUBJECT_PER_TERM = 2   # more courses than this in one department in one semester is avoided
+    SPREAD_COST = 400           # per extra course: above "required courses early", below one extra hour
+
+    def _spread(self) -> list:
+        """7. Space out a department's courses (students rarely take, say, four BEM courses at once).
+        Labs (e.g. CHM 111L) go with their lecture and don't count."""
+        by_subject: dict[str, list[str]] = {}
+        for cid in self.take:
+            if not cid.endswith("L"):
+                by_subject.setdefault(cid.split()[0], []).append(cid)
+        obj = []
+        for subj, cids in by_subject.items():
+            if len(cids) <= self.SAME_SUBJECT_PER_TERM:
+                continue
+            for ti, term in enumerate(self.terms):
+                here = [self.take[c][ti] for c in cids if ti in self.take[c]]
+                if len(here) <= self.SAME_SUBJECT_PER_TERM:
+                    continue
+                extra = self.m.new_int_var(0, len(here), f"crowd[{subj},{term}]")
+                self.m.add(extra >= sum(here) - self.SAME_SUBJECT_PER_TERM)
+                obj.append(self.SPREAD_COST * extra)
+        return obj
 
     KEEP_SAME_TERM = 3000      # below one extra hour (10 tenths x 1000), above balance and preferences
     KEEP_IN_PLAN = 1500

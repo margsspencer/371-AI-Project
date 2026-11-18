@@ -22,6 +22,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 from gradplanner.models import Catalog, CourseAtom
+from gradplanner.planner.ap import ap_divisional_subjects
 from gradplanner.planner.plan import Plan
 from gradplanner.planner.requirements import (
     LANGUAGE_DONE, CoreNeed, PlannerSettings, core_needs, countable_hours, course_counts_for_core,
@@ -86,7 +87,8 @@ def _entries(catalog: Catalog, student: StudentProfile, plan: Plan | None, notes
     out = []
     for c in student.completed:
         if c.course in catalog.courses:
-            out.append(Entry(c.course, "done", catalog.courses[c.course].credits, c.course, c.source))
+            hours = catalog.courses[c.course].credits if c.hours is None else c.hours
+            out.append(Entry(c.course, "done", hours, c.course, c.source))
         else:
             notes.append(f"{c.course} is not in our catalog; list it under outside_courses to count it.")
     for cid in student.in_progress:
@@ -190,6 +192,7 @@ def _core_lines(catalog: Catalog, student: StudentProfile, entries: list[Entry],
     needs = {n.id: n for n in core_needs(catalog, student, settings)}
     lines: dict[str, AuditLine] = {}
     used_21cs: set[int] = set()            # ids of entries already used for a 21CS category
+    ap_subjects = ap_divisional_subjects(student)
 
     def qualifies(e: Entry, need: CoreNeed) -> bool:
         if e.counts_for == need.id and e.source == "affiliate":   # non-Wake abroad: transfer credit, no 21CS
@@ -197,7 +200,8 @@ def _core_lines(catalog: Catalog, student: StudentProfile, entries: list[Entry],
         if e.counts_for == need.id:                         # outside course or slot entered for this category
             return not (e.source != "wfu" and need.kind in ("division", "21cs"))
         if e.course_id:
-            return course_counts_for_core(catalog.courses[e.course_id], need, catalog, settings, e.source)
+            return course_counts_for_core(catalog.courses[e.course_id], need, catalog, settings, e.source,
+                                          ap_subjects)
         return False
 
     def finish(need: CoreNeed, used: list[Entry], required: int, extra: str = "") -> AuditLine:

@@ -37,6 +37,8 @@ from gradplanner.planner.terms import Term, terms_between
 class CompletedCourse:
     course: str                  # catalog id, e.g. "CSC 111"
     source: str = "wfu"          # wfu | ap | transfer  (AP/transfer can't count for divisional or 21CS)
+    hours: float | None = None   # None = the catalog's credit hours (AP credit can be 0 hours)
+    from_exam: str | None = None # set for credit generated from an AP exam (see planner/ap.py)
 
 
 @dataclass
@@ -47,6 +49,13 @@ class OutsideCourse:
     counts_for: str | None = None   # a core category id like "DIV-I", a major/minor rule key like
                                     # "FIN-BS:1.0" (credit from abroad), or None for a plain elective
     source: str = "wfu"             # wfu | ap | transfer | affiliate (non-Wake Forest study abroad)
+    from_exam: str | None = None    # set for credit generated from an AP exam
+
+
+@dataclass
+class ApExam:
+    exam: str            # name as in data/overrides/ap_credit.yaml, e.g. "Calculus BC"
+    score: int           # 1-5
 
 
 @dataclass
@@ -85,6 +94,12 @@ class StudentProfile:
     abroad: list[AbroadTerm] = field(default_factory=list)
     overload_hours: float = 0           # 0 = no overloads; else the most hours in an overloaded semester
     overload_terms: int = 2             # at most this many overloaded semesters
+    ap_exams: list[ApExam] = field(default_factory=list)   # turned into credit by planner/ap.py
+
+    def course_hours(self, catalog) -> dict[str, float]:
+        """Hours earned for each finished catalog course (AP credit may differ from the catalog)."""
+        return {c.course: catalog.courses[c.course].credits if c.hours is None else c.hours
+                for c in self.finished if c.course in catalog.courses}
 
     def can_overload(self, term: Term) -> bool:
         """Overloads are for regular on-campus semesters only (not summer, not abroad)."""
@@ -151,12 +166,14 @@ def profile_from_dict(d: dict) -> StudentProfile:
                 for a in d.get("abroad") or []],
         overload_hours=float(d.get("overload_hours") or 0),
         overload_terms=int(d.get("overload_terms", 2)),
+        ap_exams=[ApExam(str(a["exam"]), int(a["score"])) for a in d.get("ap_exams") or []],
     )
     if p.graduation_term < p.next_term:
         raise ValueError("graduation_term is before next_term")
     if p.next_term < p.entry_term:
         raise ValueError("next_term is before entry_term")
-    return p
+    from gradplanner.planner.ap import apply_ap      # here to avoid a circular import
+    return apply_ap(p)
 
 
 def load_profile(path: str | Path) -> StudentProfile:
@@ -175,10 +192,12 @@ def profile_to_dict(p: StudentProfile) -> dict:
         "max_hours_per_term": p.max_hours_per_term, "include_summer": p.include_summer,
         "summer_max_hours": p.summer_max_hours, "language_courses_needed": p.language_courses_needed,
         "language": p.language, "language_placement": p.language_placement,
-        "completed": [{"course": c.course, "source": c.source} for c in p.completed],
+        "completed": [{"course": c.course, "source": c.source, **({"hours": c.hours} if c.hours is not None else {})}
+                      for c in p.completed if not c.from_exam],
         "in_progress": list(p.in_progress),
         "outside_courses": [{"name": o.name, "hours": o.hours, "counts_for": o.counts_for, "source": o.source}
-                            for o in p.outside_courses],
+                            for o in p.outside_courses if not o.from_exam],
+        "ap_exams": [{"exam": a.exam, "score": a.score} for a in p.ap_exams],
         "interests": list(p.interests), "career": p.career, "career_text": p.career_text,
         "abroad": [{"term": str(a.term), "program": a.program, "location": a.location} for a in p.abroad],
         "overload_hours": p.overload_hours, "overload_terms": p.overload_terms,

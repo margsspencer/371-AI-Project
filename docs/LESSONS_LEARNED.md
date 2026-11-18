@@ -313,3 +313,16 @@ concentrations, and self-designed majors are out.
     "does not fulfill the foreign language requirement"; Spanish needs SPA 202. Each
     language sequence now ends at a course the Bulletin names, or the usual next
     course after the 153 level.
+50. **A hidden widget forgets its value.** In Streamlit, a widget that isn't drawn
+    on a run loses its state. Choosing a language hides "Language courses left", so
+    the form came back without it and "Make my plan" crashed. The form now starts
+    from the blank profile's values, and a test drives the app through that path.
+51. **Placement means "no credit below here", not just "start here".** The Bulletin
+    says students get no credit for a course below their placement. The planner
+    treated lower courses as merely unnecessary and used CHI 102 to fill hours in a
+    senior semester. Courses below the placement are now never planned, and the
+    checker flags them.
+52. **Check the policy before building what was asked.** The request was for AP
+    credit to cover divisionals; the 2025-26 AP policy says it can't (since 2007),
+    except for one narrow rule. We built the policy, explained the difference, and
+    marked our reading of the exception as needing advisor confirmation.

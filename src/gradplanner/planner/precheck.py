@@ -128,14 +128,14 @@ def precheck(catalog: Catalog, student: StudentProfile, settings: PlannerSetting
     extra = sorted((student.overload_hours - student.max_hours(t, bulletin_max) for t in terms
                     if student.can_overload(t)), reverse=True)
     capacity += sum(max(0.0, x) for x in extra[:student.overload_terms])         # allowed overloads
-    earned = sum(catalog.courses[c].credits for c in done) + sum(o.hours for o in student.outside_courses)
+    hours = student.course_hours(catalog)
+    earned = sum(hours.values()) + sum(o.hours for o in student.outside_courses)
     total = rule_or(catalog, "total_hours", 120)
     if earned + capacity < total:
         blocking.append(f"Even at the maximum load you would have {earned + capacity:g} of {total:g} hours "
                         f"by {terms[-1]}. Add semesters, summer terms, or allow overloads.")
 
-    outside = sum(catalog.courses[c.course].credits for c in student.finished
-                  if c.source != "wfu" and c.course in catalog.courses)
+    outside = sum(hours[c.course] for c in student.finished if c.source != "wfu" and c.course in hours)
     outside += sum(o.hours for o in student.outside_courses if o.source != "wfu")
     if outside > rule_or(catalog, "max_outside_hours", 30):
         notes.append(f"You list {outside:g} AP/transfer hours; at most "
