@@ -1,4 +1,4 @@
-"""WFU Graduation Calendar Planner: the web app.
+"""WFU Graduation Planner: the web app.
 
 Run with:
     streamlit run src/gradplanner/ui/app.py
@@ -23,7 +23,7 @@ import yaml
 from gradplanner import config
 from gradplanner.db.store import default_db_path, load_catalog
 from gradplanner.planner import load_profile
-from gradplanner.planner.requirements import load_settings, program_problems, rule_or
+from gradplanner.planner.requirements import LANGUAGE_DONE, load_settings, program_problems, rule_or
 from gradplanner.planner.terms import Term
 from gradplanner.recommender import Recommender, load_careers
 from gradplanner.recommender.tfidf import WEAK_SCORE
@@ -53,6 +53,11 @@ def catalog():
     return load_catalog()
 
 
+@st.cache_resource
+def settings():
+    return load_settings(catalog())
+
+
 @st.cache_resource(show_spinner="Reading course descriptions...")
 def recommender():
     return Recommender(catalog())
@@ -62,6 +67,7 @@ def recommender():
 
 BLANK = {"name": "New Student (fictional)", "majors": ["CSC-BS"], "minors": [], "entry": "Fall 2026", "next_term": "Fall 2026",
          "graduation": "Spring 2030", "max_hours": 17.0, "summer": False, "language_needed": 1,
+         "language": "", "language_placement": "",
          "completed": [], "ap_credit": [], "in_progress": [], "outside": [], "interests": [],
          "career": "", "career_text": "", "abroad": False, "abroad_terms": [], "abroad_program": "wfu",
          "abroad_location": "", "overload": False, "overload_hours": 19.0, "overload_terms": 2}
@@ -106,11 +112,8 @@ def sidebar(cat) -> dict | None:
     c1.selectbox("First semester at WFU", terms, key="f_entry")
     c2.selectbox("First semester to plan", terms, key="f_next_term")
     sb.selectbox("Graduate by", terms, key="f_graduation")
-    c1, c2 = sb.columns(2)
-    c1.number_input("Max hours / semester", 12.0, 17.0, step=1.0, format="%.0f", key="f_max_hours",
+    sb.number_input("Max hours / semester", 12.0, 17.0, step=1.0, format="%.0f", key="f_max_hours",
                     help="The Bulletin allows up to 17 hours without special permission.")
-    c2.number_input("Language courses left", 0, 4, key="f_language_needed",
-                    help="Courses still needed to finish one 200-level foreign language course.")
     sb.checkbox("Allow summer courses", key="f_summer")
     if sb.checkbox("Allow overloads if needed", key="f_overload",
                    help="More than 17 hours in a semester needs permission (Bulletin). The planner overloads "
@@ -118,6 +121,8 @@ def sidebar(cat) -> dict | None:
         c1, c2 = sb.columns(2)
         c1.number_input("Up to (hours)", 18.0, 21.0, step=1.0, format="%.0f", key="f_overload_hours")
         c2.number_input("In at most (semesters)", 1, 4, key="f_overload_terms")
+
+    language_section(sb, cat)
 
     sb.subheader("Courses")
     fmt = lambda c: course_label(cat, c)          # noqa: E731
@@ -158,6 +163,35 @@ def sidebar(cat) -> dict | None:
     form = {k[2:]: st.session_state[k] for k in st.session_state if k.startswith("f_")}
     form["outside"] = outside.to_dict("records")
     return form
+
+
+def language_section(sb, cat) -> None:
+    """Foreign language: the language and the placement test result decide which courses are planned."""
+    langs = settings().languages
+    sb.subheader("Language")
+    lang = sb.selectbox("Language", [""] + sorted(langs, key=lambda s: langs[s].name), key="f_language",
+                        format_func=lambda s: langs[s].name if s else "Not chosen yet / other",
+                        help="Wake Forest requires one 200-level foreign language course. The placement test "
+                             "you take before your first semester decides where you start (1–4 semesters).")
+    if not lang:
+        sb.number_input("Language courses left", 0, 4, key="f_language_needed",
+                        help="Courses still needed to finish one 200-level course (0 = done or exempt). "
+                             "Planned as 'Foreign language (choose a course)'.")
+        return
+    seq = langs[lang]
+    options = seq.courses + [LANGUAGE_DONE]
+    if st.session_state.get("f_language_placement") not in options:
+        st.session_state.f_language_placement = seq.courses[0]
+
+    def label(c: str) -> str:
+        if c == LANGUAGE_DONE:
+            return "Placed out / exempt (requirement done)"
+        n = len(seq.courses) - seq.courses.index(c)
+        return f"{c} · {n} semester{'s' if n > 1 else ''}"
+    sb.selectbox("Placement test result: start in", options, format_func=label, key="f_language_placement",
+                 help="The planner schedules every course from here to the one that completes the "
+                      "requirement, one per semester: " + " → ".join(course_label(cat, c) for c in seq.courses)
+                      + ". Completed language courses are skipped.")
 
 
 # ---------------------------------------------------------------- result views
@@ -340,7 +374,7 @@ def main() -> None:
     if st.button("Make my plan", type="primary"):
         try:
             student = build_profile(**form)
-            conflicts = program_problems(cat, student, load_settings(cat))
+            conflicts = program_problems(cat, student, settings())
             if conflicts:
                 raise ValueError(" ".join(conflicts))
         except ValueError as exc:

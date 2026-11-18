@@ -57,7 +57,7 @@ def build_profile(*, name: str, majors: list[str], minors: list[str], entry: str
                   interests: list[str], career: str | None, career_text: str, abroad: bool = False,
                   abroad_terms: list[str] = (), abroad_program: str = "wfu",
                   abroad_location: str = "", overload: bool = False, overload_hours: float = 19,
-                  overload_terms: int = 2) -> StudentProfile:
+                  overload_terms: int = 2, language: str = "", language_placement: str = "") -> StudentProfile:
     """A profile from the sidebar form. Raises ValueError with a readable message on bad input."""
     if not majors:
         raise ValueError("Choose at least one major.")
@@ -84,7 +84,8 @@ def build_profile(*, name: str, majors: list[str], minors: list[str], entry: str
         name=name.strip() or "Student (fictional)", program=majors[0],
         other_programs=list(majors[1:]) + list(minors), entry_term=entry_t, next_term=next_t,
         graduation_term=grad_t, max_hours_per_term=max_hours, include_summer=summer,
-        language_courses_needed=language_needed, completed=done, in_progress=list(in_progress),
+        language_courses_needed=language_needed, language=language or None,
+        language_placement=(language_placement or None) if language else None, completed=done, in_progress=list(in_progress),
         outside_courses=rows, interests=list(interests), career=career or None, career_text=career_text.strip(),
         abroad=[AbroadTerm(Term.parse(t), abroad_program, abroad_location.strip())
                 for t in (abroad_terms if abroad else [])],
@@ -99,6 +100,7 @@ def profile_to_form(st: StudentProfile, catalog: Catalog) -> dict:
         "minors": [p for p in st.programs if kinds[p] == "minor"], "entry": str(st.entry_term), "next_term": str(st.next_term),
         "graduation": str(st.graduation_term), "max_hours": float(st.max_hours_per_term),
         "summer": st.include_summer, "language_needed": st.language_courses_needed,
+        "language": st.language or "", "language_placement": st.language_placement or "",
         "completed": [c.course for c in st.completed if c.source == "wfu"],
         "ap_credit": [c.course for c in st.completed if c.source != "wfu"],
         "in_progress": list(st.in_progress),

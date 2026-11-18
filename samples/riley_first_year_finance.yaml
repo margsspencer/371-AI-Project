@@ -8,7 +8,8 @@ entry_term: Fall 2026
 next_term: Fall 2026
 graduation_term: Spring 2030
 max_hours_per_term: 17
-language_courses_needed: 1
+language: FRH                  # French placement test: start in FRH 153 (FRH 153, then FRH 212)
+language_placement: FRH 153
 completed: []
 outside_courses: []
 interests: []

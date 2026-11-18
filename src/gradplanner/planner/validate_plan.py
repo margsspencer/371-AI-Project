@@ -15,7 +15,7 @@ from gradplanner.parser.prereq import cnf_satisfied, cnf_to_text, unmet_clauses
 from gradplanner.planner.plan import Plan
 from gradplanner.planner.precheck import unplannable_needs
 from gradplanner.planner.requirements import (
-    ABROAD_COURSE_HOURS, PlannerSettings, abroad_problems, abroad_program_cap, core_needs, countable_hours, course_counts_for_core, fits_hours_rule, load_settings,
+    ABROAD_COURSE_HOURS, PlannerSettings, abroad_problems, abroad_program_cap, core_needs, countable_hours, course_counts_for_core, fits_hours_rule, language_courses, language_sequence, load_settings,
     program_problems, rule_or, schedulable_reason, student_needs,
 )
 from gradplanner.planner.student import StudentProfile
@@ -41,7 +41,8 @@ def validate_plan(plan: Plan, catalog: Catalog, student: StudentProfile,
     # --- each course once, offered, schedulable, prerequisites/corequisites, standing, load
     seen: dict[str, str] = {}
     overloads: list[str] = []
-    have_before: set[str] = set(done)               # courses finished before the current term
+    lang, placed = language_courses(student, settings)
+    have_before: set[str] = set(done) | placed      # finished before the current term (placement counts)
     hours_before = sum(catalog.courses[c].credits for c in done) + sum(o.hours for o in student.outside_courses)
     bulletin_max = rule_or(catalog, "max_hours_per_semester", 17)
     for tp in plan.terms:
@@ -91,7 +92,7 @@ def validate_plan(plan: Plan, catalog: Catalog, student: StudentProfile,
         problems.append(f"{len(overloads)} overloaded semesters ({', '.join(overloads)}); "
                         f"at most {student.overload_terms} allowed.")
 
-    everything = set(have_before)                  # completed + all planned courses
+    everything = have_before - (placed - set(done))   # completed + all planned courses
     for cid in everything:
         for other in catalog.courses[cid].exclusive_with:
             if other in everything and cid < other:
@@ -145,6 +146,8 @@ def validate_plan(plan: Plan, catalog: Catalog, student: StudentProfile,
     needs = core_needs(catalog, student, settings)
     per_course_kind: dict[tuple[str, str], int] = {}
     for need in needs:
+        if need.id == "BASIC-LANG" and language_sequence(student, settings):
+            continue                                   # checked below as a course sequence
         courses = counts.get(need.id, [])
         for cid in courses:
             if not course_counts_for_core(catalog.courses[cid], need, catalog, settings, done.get(cid, "wfu")):
@@ -171,6 +174,14 @@ def validate_plan(plan: Plan, catalog: Catalog, student: StudentProfile,
     for (cid, kind), n in per_course_kind.items():
         if kind in ("division", "21cs") and n > 1:
             problems.append(f"{cid} is counted toward more than one {kind} category.")
+
+    # --- foreign language: every course from the placement level, one after another
+    when = {cid: tp.term for tp in plan.terms for cid in tp.course_ids}
+    for i, cid in enumerate(lang):
+        if cid not in when:
+            problems.append(f"Not met: foreign language ({cid} is not planned).")
+        elif i and lang[i - 1] in when and not when[lang[i - 1]] < when[cid]:
+            problems.append(f"{when[cid]}: {cid} must come in a later semester than {lang[i - 1]}.")
 
     # --- 120 hours
     earned = (sum(catalog.courses[c].credits for c in done) + sum(o.hours for o in student.outside_courses)

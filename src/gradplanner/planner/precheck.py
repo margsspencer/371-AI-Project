@@ -13,7 +13,8 @@ from __future__ import annotations
 import math
 
 from gradplanner.models import Catalog, CourseAtom, LevelAtom
-from gradplanner.planner.requirements import PlannerSettings, rule_or, schedulable_reason, student_needs
+from gradplanner.planner.requirements import (PlannerSettings, language_courses, rule_or, schedulable_reason,
+                                              student_needs)
 from gradplanner.planner.student import StudentProfile
 from gradplanner.planner.terms import Term
 
@@ -115,6 +116,12 @@ def precheck(catalog: Catalog, student: StudentProfile, settings: PlannerSetting
         if need_terms > len(terms):
             blocking.append(f"{need.label}: the prerequisite chain {' -> '.join(path)} takes "
                             f"{need_terms:g} semesters, but only {len(terms)} remain before {terms[-1]}.")
+
+    lang, _ = language_courses(student, settings)
+    on_campus = [t for t in terms if t.season != "summer" and student.abroad_in(t) is None]
+    if len(lang) > len(on_campus):
+        blocking.append(f"Foreign language: {len(lang)} courses ({' -> '.join(lang)}) take one semester each, "
+                        f"but only {len(on_campus)} fall/spring semesters on campus remain.")
 
     bulletin_max = rule_or(catalog, "max_hours_per_semester", 17)
     capacity = sum(student.max_hours(t, bulletin_max) for t in terms)

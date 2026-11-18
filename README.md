@@ -81,6 +81,16 @@ the plan can't fit otherwise, prefers later semesters, never overloads summer or
 abroad, and notes each overload as needing permission. The Bulletin gives no upper
 limit, so the cap is the student's choice.
 
+**Foreign language.** Wake Forest requires one 200-level foreign language course.
+Pick the language and the placement test result (where the student starts); the
+planner schedules the real courses from there, one per semester, back to back and
+from the first year when possible: 1-4 courses, e.g. SPA 101 → 102 → 201 → 202.
+Courses below the placement level count as prerequisites met. Sequences for 12
+languages are in `data/overrides/team_decisions.yaml` (Spanish ends at SPA 202
+because the Bulletin says SPA 201 "does not fulfill the foreign language
+requirement"). "Not chosen yet / other" keeps the old behavior: a number of generic
+"Foreign language" slots.
+
 **Study abroad.** Tick "I plan to study abroad" and pick one or two semesters (junior
 spring by default) and the program type. An abroad semester holds "abroad course"
 slots instead of catalog courses: divisionals, the language requirement, 21st-century

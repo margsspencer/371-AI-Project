@@ -65,7 +65,7 @@ def _all_day(cal: Calendar, uid: str, summary: str, start, end=None, description
 
 def plan_to_ics(plan: Plan, catalog: Catalog) -> bytes:
     cal = Calendar()
-    cal.add("prodid", "-//WFU Graduation Calendar Planner (class project)//EN")
+    cal.add("prodid", "-//WFU Graduation Planner (class project)//EN")
     cal.add("version", "2.0")
     cal.add("x-wr-calname", f"Graduation plan: {plan.student_name}")
     last_spring = None

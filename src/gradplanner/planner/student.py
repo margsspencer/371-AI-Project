@@ -73,6 +73,8 @@ class StudentProfile:
     include_summer: bool = False
     summer_max_hours: float = 8
     language_courses_needed: int = 1    # language courses still needed to finish one 200-level course
+    language: str | None = None         # subject code ("SPA"); with it, real courses are planned
+    language_placement: str | None = None   # course the placement test put them in ("SPA 102"), or "done"
     completed: list[CompletedCourse] = field(default_factory=list)
     in_progress: list[str] = field(default_factory=list)   # current semester, before next_term
     outside_courses: list[OutsideCourse] = field(default_factory=list)
@@ -137,6 +139,8 @@ def profile_from_dict(d: dict) -> StudentProfile:
         include_summer=d.get("include_summer", False),
         summer_max_hours=d.get("summer_max_hours", 8),
         language_courses_needed=d.get("language_courses_needed", 1),
+        language=d.get("language"),
+        language_placement=d.get("language_placement"),
         completed=[CompletedCourse(**c) for c in d.get("completed", [])],
         in_progress=list(d.get("in_progress", [])),
         outside_courses=[OutsideCourse(**c) for c in d.get("outside_courses", [])],
@@ -170,6 +174,7 @@ def profile_to_dict(p: StudentProfile) -> dict:
         "entry_term": str(p.entry_term), "next_term": str(p.next_term), "graduation_term": str(p.graduation_term),
         "max_hours_per_term": p.max_hours_per_term, "include_summer": p.include_summer,
         "summer_max_hours": p.summer_max_hours, "language_courses_needed": p.language_courses_needed,
+        "language": p.language, "language_placement": p.language_placement,
         "completed": [{"course": c.course, "source": c.source} for c in p.completed],
         "in_progress": list(p.in_progress),
         "outside_courses": [{"name": o.name, "hours": o.hours, "counts_for": o.counts_for, "source": o.source}

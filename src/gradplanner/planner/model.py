@@ -63,7 +63,8 @@ from gradplanner.planner.precheck import precheck, unplannable_needs
 from gradplanner.planner.requirements import (
     ABROAD_COURSE_HOURS, PlannerSettings, abroad_category_ok, abroad_problems, abroad_program_cap,
     admission_courses, business_reason, core_needs, countable_hours,
-    course_counts_for_core, fits_hours_rule, is_business_student, load_settings, needed_courses, program_needs,
+    course_counts_for_core, fits_hours_rule, is_business_student, language_courses, language_sequence,
+    load_settings, needed_courses, program_needs,
     outside_hours_toward, program_problems, rule_or, schedulable_reason, student_needs,
 )
 from gradplanner.planner.student import StudentProfile
@@ -87,7 +88,7 @@ TOP_RELEVANT = 25        # career matches the planner may consider as free elect
 
 
 def relevant_courses(catalog: Catalog, program, student: StudentProfile,
-                     relevance: dict[str, int] | None = None) -> set[str]:
+                     relevance: dict[str, int] | None = None, extra: set[str] = frozenset()) -> set[str]:
     """Courses worth giving the solver: the program's courses, courses that can fill its
     elective-hours rules, the student's interests, the best career matches, and everything
     those need as prerequisites or corequisites. With thousands of courses in the catalog,
@@ -100,7 +101,7 @@ def relevant_courses(catalog: Catalog, program, student: StudentProfile,
         elif n.item.kind == "hours":
             seeds |= {cid for cid, c in catalog.courses.items()
                       if c.subject in (n.item.subject or "").split("|") and c.level >= (n.item.min_level or 0)}
-    seeds |= set(student.interests)
+    seeds |= set(student.interests) | set(extra)
     if relevance:
         seeds |= {cid for cid, sc in sorted(relevance.items(), key=lambda kv: -kv[1])[:TOP_RELEVANT] if sc > 0}
     out, todo = set(), [c for c in seeds if c in catalog.courses]
@@ -195,8 +196,13 @@ class _Builder:
                            + sum(o.hours for o in self.st.outside_courses))
 
         self.admission = admission_courses(self.cat)
+        # Foreign language: the courses still needed from the placement level, in order.
+        self.lang, self.placed = language_courses(self.st, ctx.settings)
+        seq = language_sequence(self.st, ctx.settings)
+        self.lang_all = set(seq.courses) if seq else set()
         self.candidates: dict[str, Course] = {}
-        seeds = set().union(*(relevant_courses(self.cat, p, self.st, relevance) for p in self.programs))
+        seeds = set().union(*(relevant_courses(self.cat, p, self.st, relevance, set(self.lang))
+                              for p in self.programs))
         for cid in seeds:
             course = self.cat.courses[cid]
             if cid not in self.done and schedulable_reason(course) is None:
@@ -210,7 +216,7 @@ class _Builder:
         self.hrs: dict[tuple[str, str], cp_model.IntVar] = {}
         self.cov: dict[tuple[str, str], cp_model.IntVar] = {}
         self.pneeds = student_needs(self.cat, self.st)
-        self.required = needed_courses(self.cat, self.st)
+        self.required = needed_courses(self.cat, self.st) | set(self.lang)
         self.cneeds = [n for n in core_needs(self.cat, self.st, ctx.settings) if n.count > 0]
         self.abroad = {ti: a for ti, t in enumerate(self.terms) if (a := self.st.abroad_in(t))}
         self.skipped = unplannable_needs(self.cat, self.st)
@@ -300,7 +306,7 @@ class _Builder:
         def before(var_by_term):
             return [v for tj, v in var_by_term.items() if tj < ti or (inclusive and tj == ti)]
         if isinstance(atom, CourseAtom):
-            if atom.code in self.done:
+            if atom.code in self.done or atom.code in self.placed:     # placed above it: counts as met
                 return True, []
             return False, before(self.take.get(atom.code, {}))
         if isinstance(atom, LevelAtom):
@@ -431,11 +437,32 @@ class _Builder:
                                        if k == need.id and c.startswith(subj + " ")) <= 1)
             slots = list(self.slot[need.id].values())
             self.m.add(sum(covered) + sum(slots) >= need.count).only_enforce_if(on)
+        self._language()
         # One course counts toward at most one division, and at most one 21CS category.
         for kind in ("division", "21cs"):
             ids = {n.id for n in self.cneeds if n.kind == kind}
             for cid in {c for c, k in self.cov if k in ids}:
                 self.m.add(sum(v for (c, k), v in self.cov.items() if c == cid and k in ids) <= 1)
+
+    def _language(self) -> None:
+        """The chosen language's courses from the placement level, each in a later semester than the one before."""
+        on = self.sw["core"]
+        lang_cat = next((c for c in self.cat.core if c.id == "BASIC-LANG"), None)
+        if lang_cat and self.lang_all:
+            self.plan.labels["BASIC-LANG"] = lang_cat.name
+        for i, cid in enumerate(self.lang):
+            if cid not in self.take:
+                self.m.add(on == 0)            # can't be scheduled in these semesters: report a core conflict
+                continue
+            self.m.add(self.taken[cid] == 1).only_enforce_if(on)
+            prev = self.lang[i - 1] if i else None
+            if prev in self.take:
+                for ti, x in self.take[cid].items():
+                    self.m.add(sum(v for tj, v in self.take[prev].items() if tj < ti) >= 1).only_enforce_if([x, on])
+        if self.lang:
+            seq = language_sequence(self.st, self.ctx.settings)
+            self.plan.notes.append(f"Foreign language: {seq.name}, from {self.lang[0]} (your placement) to "
+                                   f"{self.lang[-1]}: " + " → ".join(self.lang) + ", one per semester.")
 
     def _total(self) -> None:
         total = rule_or(self.cat, "total_hours", 120)
@@ -472,6 +499,10 @@ class _Builder:
                 obj.append((300 - 2 * score) * self.taken[cid])         # 4. no unneeded courses; career fit
             else:
                 obj.append(sum(20 * ti * v for ti, v in per_term.items()))   # 5. required courses early
+        # 6. Language courses early and back to back (a gap of a semester makes the next course harder).
+        pos = {c: sum(ti * v for ti, v in self.take[c].items()) for c in self.lang if c in self.take}
+        obj += [150 * p for p in pos.values()]
+        obj += [300 * (pos[b] - pos[a]) for a, b in zip(self.lang, self.lang[1:]) if a in pos and b in pos]
         self.m.minimize(sum(obj))
 
     KEEP_SAME_TERM = 3000      # below one extra hour (10 tenths x 1000), above balance and preferences
@@ -570,6 +601,8 @@ class _Builder:
                 keys.append(need.key)
         keys += [k for (c, k), v in self.hrs.items() if c == cid and solver.value(v)]
         keys += [k for (c, k), v in self.cov.items() if c == cid and solver.value(v)]
+        if cid in self.lang_all:
+            keys.append("BASIC-LANG")
         return keys
 
     def _abroad_term(self, ti: int, term: Term, solver: cp_model.CpSolver) -> TermPlan:

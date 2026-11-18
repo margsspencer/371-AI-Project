@@ -24,8 +24,8 @@ from dataclasses import dataclass, field
 from gradplanner.models import Catalog, CourseAtom
 from gradplanner.planner.plan import Plan
 from gradplanner.planner.requirements import (
-    CoreNeed, PlannerSettings, core_needs, countable_hours, course_counts_for_core, fits_hours_rule,
-    load_settings, program_needs, rule_or,
+    LANGUAGE_DONE, CoreNeed, PlannerSettings, core_needs, countable_hours, course_counts_for_core,
+    fits_hours_rule, language_sequence, load_settings, program_needs, rule_or,
 )
 from gradplanner.planner.student import StudentProfile
 
@@ -216,6 +216,28 @@ def _core_lines(catalog: Catalog, student: StudentProfile, entries: list[Entry],
         if need.kind == "slot":
             codes = {a.code for clause in cat.course_cnf for a in clause if isinstance(a, CourseAtom)}
             used = _first([e for e in entries if e.counts_for == cat.id or (e.course_id in codes)])
+            seq = language_sequence(student, settings) if cat.id == "BASIC-LANG" else None
+            if seq:
+                # A chosen language: its courses from the placement level up to the one that completes it.
+                if student.language_placement == LANGUAGE_DONE:
+                    lines[cat.id] = AuditLine(SECTIONS["basic"], cat.name, "done",
+                                              f"{seq.name}: placed out or exempt (profile)")
+                    continue
+                start = seq.courses.index(student.language_placement) \
+                    if student.language_placement in seq.courses else 0
+                steps = seq.courses[start:]
+                found = {e.course_id: e for e in _first([e for e in entries if e.course_id in steps])}
+                last = max((i for i, c in enumerate(steps) if c in found and found[c].stage == "done"), default=-1)
+                needed = steps[last + 1:]
+                used = [found[c] for c in steps[:last + 1] if c in found][-1:] + [found[c] for c in needed
+                                                                                    if c in found]
+                line = finish(need, used, len(needed) + (1 if last >= 0 else 0), " language courses")
+                line.detail = f"{seq.name} from {steps[0]}: " + (", ".join(e.label for e in used)
+                                                                 or "nothing planned yet")
+                if len(used) < len(needed) + (1 if last >= 0 else 0):
+                    line.detail += " — still needs " + ", ".join(c for c in needed if c not in found)
+                lines[cat.id] = line
+                continue
             if cat.id == "BASIC-LANG":
                 # The profile says how many more language courses are needed (0 = done or placed out).
                 still = student.language_courses_needed

@@ -29,9 +29,10 @@ TITLE_RE = re.compile(rf"^(?P<code>{COURSE_CODE})\.\s+(?P<rest>.+)$")
 CREDITS_RE = re.compile(r"\((?P<lo>\d+(?:\.\d+)?)(?:\s*[-–]\s*(?P<hi>\d+(?:\.\d+)?))?\s*h\)\s*$")
 # One or more trailing tags like "(D)" or "(QDA)" at the very end of a description.
 TRAILING_TAG_RE = re.compile(r"\(\s*([A-Z]{1,5}(?:\s*,\s*[A-Z]{1,5})*)\s*\)\s*$")
-# Start of a prerequisite ("P-", "P -", "P- ") or corequisite ("C-") sentence.
-PREREQ_START_RE = re.compile(r"(?<![A-Za-z])P\s*-\s*")
-COREQ_START_RE = re.compile(r"(?<![A-Za-z])C\s*-\s*")
+# Start of a prerequisite ("P-", "P -", "P- ") or corequisite ("C-") sentence. Some departments
+# write an en or em dash ("P– SPA 101", "P—SPA 153"), so accept all three.
+PREREQ_START_RE = re.compile(r"(?<![A-Za-z])P\s*[-–—]\s*")
+COREQ_START_RE = re.compile(r"(?<![A-Za-z])C\s*[-–—]\s*")
 OVERRIDE_RE = re.compile(r",?\s*or\s+(?:the\s+)?prerequisite override required", re.I)
 # Sentences about *when* a course runs. "offered by the department" is not one of them.
 OFFERING_RE = re.compile(

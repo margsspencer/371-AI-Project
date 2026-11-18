@@ -1,6 +1,6 @@
 # Demo script (under 5 minutes)
 
-WFU Graduation Calendar Planner, CSC 371. All students in the demo are fictional.
+WFU Graduation Planner, CSC 371. All students in the demo are fictional.
 Times are targets; rehearse twice with a timer.
 
 ## Before the demo (10 minutes ahead)
@@ -31,8 +31,8 @@ Point at the **Advisory only** box.
 ## 0:20 – 1:20 · A plan for a first-year student
 
 Sidebar: **Start from → Sam Example (fictional) → Load**. Mention: Computer Science
-B.S., nothing completed, career goal "machine learning engineer, AI for healthcare".
-Press **Make my plan**.
+B.S., nothing completed, placed into SPA 201 on the Spanish placement test, career
+goal "machine learning engineer, AI for healthcare". Press **Make my plan**.
 
 > *While it solves: the planner is a constraint solver (Google OR-Tools). Each rule
 > is a constraint: a prerequisite must come in an earlier semester, at most 17 hours,
@@ -43,7 +43,8 @@ When it appears:
 - Point at **Plan check: Valid**. *"A second, separate program re-checks every rule
   with plain loops. Two independent methods agree."*
 - Scroll the semester cards; point at a ⭐ course: *"chosen because it matches the
-  career goal."*
+  career goal."* Point at SPA 201 then SPA 202 in the next semester: *"the language
+  requirement, from the placement level, one semester after another."*
 
 Backup: `python scripts/plan.py samples/sam_first_year_bs.yaml`
 

@@ -303,3 +303,13 @@ concentrations, and self-designed majors are out.
     Accountancy. The parser read the heading, not the sentence, so every Finance
     plan carried 13.5 unneeded hours. A user who knows the major caught it. Tables
     introduced as an optional track are now kept as a note, not planned.
+48. **One character dropped 61 prerequisites.** The course parser looked for "P-"
+    with a plain hyphen. Some departments (Spanish, Philosophy, Economics,
+    Engineering, BEM, ...) write "P–" or "P—", so their prerequisites were silently
+    missing: SPA 102 could be planned before SPA 101. Building the language sequences
+    exposed it. The pattern now accepts all three dashes, and a test covers it.
+49. **Read the course description, not just the number.** We assumed SPA 201, a
+    200-level course, completes the language requirement. Its description says it
+    "does not fulfill the foreign language requirement"; Spanish needs SPA 202. Each
+    language sequence now ends at a course the Bulletin names, or the usual next
+    course after the 153 level.

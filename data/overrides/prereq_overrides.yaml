@@ -17,3 +17,33 @@ STA 112:
   prereq: "STA 111 or [AP Statistics exam score of 4 or 5]"
   reason: "The Bulletin's comma here means 'or': STA 111 OR an AP Statistics score of 4-5."
   status: interpreted   # NEEDS HUMAN REVIEW
+
+GRK 211:
+  prereq: "GRK 153 or GRK 154 or [equivalent]"
+  reason: "The Bulletin's 'GRK 153, 154 or equivalent' is one list of alternatives; the parser read the comma as 'and'."
+  status: interpreted   # NEEDS HUMAN REVIEW: confirm with the Classics department
+
+SPA 202:
+  prereq: "SPA 201"
+  reason: "Bulletin: 'P– SPA 201 not earned through AP/IB credit'. The AP/IB part can't be checked; SPA 201 taken at Wake Forest meets it."
+  status: interpreted
+
+SPA 282:
+  prereq: "SPA 202 or SPA 203 or SPA 206 or SPA 212 or SPA 213 or [placement or a qualifying AP/IB score]"
+  reason: "One list of alternatives; the AP/IB scores and placement are for the advisor to confirm."
+  status: interpreted
+
+SPA 283:
+  prereq: "SPA 202 or SPA 203 or SPA 206 or SPA 212 or SPA 213 or [placement or a qualifying AP/IB score]"
+  reason: "One list of alternatives; the AP/IB scores and placement are for the advisor to confirm."
+  status: interpreted
+
+PHI 280:
+  prereq: "PHI 111 or PHI 112 or PHI 113 or PHI 114 or PHI 115 or PHI 116 or PHI 160 or PHI 161 or PHI 163 or PHI 164 or PHI 165"
+  reason: "Bulletin: 'any 100-level PHI course required'. Listed out because the overrides file has no level rule."
+  status: interpreted
+
+GER 153:
+  prereq: "GER 110 or GER 112 or GER 113"
+  reason: "'GER 110, GER 112 or GER 113' is one list of alternatives (GER 150 lists the same courses with 'or')."
+  status: interpreted

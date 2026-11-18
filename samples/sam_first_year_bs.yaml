@@ -5,7 +5,8 @@ entry_term: Fall 2026
 next_term: Fall 2026
 graduation_term: Spring 2030
 max_hours_per_term: 17
-language_courses_needed: 2     # placed into the 153 level, so two courses to finish a 200-level one
+language: SPA                  # Spanish placement test: start in SPA 201 (two semesters: SPA 201, SPA 202)
+language_placement: SPA 201
 completed: []
 outside_courses: []
 interests: []

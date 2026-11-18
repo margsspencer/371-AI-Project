@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "gradplanner"
 version = "0.1.0"
-description = "Graduation Calendar Planner for WFU CS undergraduates (course project)"
+description = "Graduation Planner for WFU undergraduates (course project)"
 requires-python = ">=3.11"
 
 [tool.setuptools.packages.find]

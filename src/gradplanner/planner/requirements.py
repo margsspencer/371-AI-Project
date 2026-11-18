@@ -28,6 +28,13 @@ class BusinessRule:
 
 
 @dataclass
+class LanguageSequence:
+    subject: str             # "SPA"
+    name: str                # "Spanish"
+    courses: list[str]       # placement levels in order; the last one completes the requirement
+
+
+@dataclass
 class AbroadRules:
     min_hours: float = 12
     default_program_hours: float = 6
@@ -44,6 +51,7 @@ class PlannerSettings:
     business: BusinessRule | None = None
     not_double_majors: list[tuple[set[str], set[str], str]] = field(default_factory=list)
     abroad: AbroadRules = field(default_factory=AbroadRules)
+    languages: dict[str, LanguageSequence] = field(default_factory=dict)
 
     def slot_hours(self, category_id: str) -> float:
         return self.placeholder_hours.get(category_id, self.placeholder_hours.get("default", 3))
@@ -66,7 +74,44 @@ def load_settings(catalog: Catalog | None = None, overrides_dir=config.OVERRIDES
     abroad = AbroadRules(float(a.get("min_hours", 12)), float(a.get("default_program_hours", 6)),
                          float(a.get("business_program_hours", 6)), dict(a.get("subject_hours") or {}),
                          set(a.get("categories") or []), list(a.get("notes") or []))
-    return PlannerSettings(hours or {"default": 3.0}, departments, business, pairs, abroad)
+    languages = {}
+    for subj, v in (team.get("language_sequences") or {}).items():
+        courses = list(v.get("courses") or [])
+        # Skip a sequence whose courses aren't all in the catalog (it would plan courses that don't exist).
+        if courses and (catalog is None or all(c in catalog.courses for c in courses)):
+            languages[subj] = LanguageSequence(subj, v.get("name", subj), courses)
+    return PlannerSettings(hours or {"default": 3.0}, departments, business, pairs, abroad, languages)
+
+
+# ---------------------------------------------------------------------------
+# Foreign language
+# ---------------------------------------------------------------------------
+
+LANGUAGE_DONE = "done"       # language_placement value: placed out, exempt, or already finished
+
+
+def language_sequence(student: StudentProfile, settings: PlannerSettings) -> LanguageSequence | None:
+    """The student's language sequence, if they chose a language we have one for."""
+    return settings.languages.get(student.language or "")
+
+
+def language_courses(student: StudentProfile, settings: PlannerSettings) -> tuple[list[str], set[str]]:
+    """(language courses still to take, in order; courses below the placement level).
+
+    The placement level is where the student starts; courses below it are skipped, but
+    they still count as prerequisites (that is what placement means). A completed course
+    in the sequence means everything before it is done too."""
+    seq = language_sequence(student, settings)
+    if seq is None:
+        return [], set()
+    if student.language_placement == LANGUAGE_DONE:
+        return [], set(seq.courses)
+    start = seq.courses.index(student.language_placement) if student.language_placement in seq.courses else 0
+    rest = seq.courses[start:]
+    done = student.completed_ids
+    last_done = max((i for i, c in enumerate(rest) if c in done), default=-1)
+    placed = set(seq.courses[:start]) | set(rest[:last_done + 1])
+    return rest[last_done + 1:], placed
 
 
 # ---------------------------------------------------------------------------
@@ -289,7 +334,10 @@ def core_needs(catalog: Catalog, student: StudentProfile, settings: PlannerSetti
     """Core categories with the number of courses still needed after outside courses are counted."""
     needs = []
     for cat in catalog.core:
-        required = student.language_courses_needed if cat.id == "BASIC-LANG" else cat.courses_required
+        required = cat.courses_required
+        if cat.id == "BASIC-LANG":
+            # With a language chosen, the real courses are planned instead of slots (see language_courses).
+            required = 0 if language_sequence(student, settings) else student.language_courses_needed
         kind = {"basic": "slot", "divisional": "division", "21CS": "21cs"}.get(cat.family, "tag")
         if cat.family == "basic" and cat.course_cnf and cnf_satisfied(cat.course_cnf, student.completed_ids):
             required = 0
